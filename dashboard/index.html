@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>BD Hack-Audit — Command Center</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%230066FF' d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3C/svg%3E" />
 <style>
   @font-face{ font-family:'Sabbir Sorolota'; src:url('assets/fonts/SabbirSorolota-num.woff2') format('woff2');
     unicode-range:U+09E6-09EF,U+09F2-09F3,U+09F9; font-weight:400 900; font-display:swap; }
@@ -304,7 +305,7 @@ function openLead(idx){
      <div class="sec-t">আক্রান্ত পেজসমূহ (${bn(ev.length)})</div>${evHtml}
      <div class="sec-t">এক-ক্লিক outreach</div>
      <div class="out">
-       <a class="btn wa" target="_blank" rel="noopener" href="${wa?('https://wa.me/'+wa+'?text='+encodeURIComponent(p)):'#'}" ${wa?'':'onclick="alert(\\'এই lead-এ phone নেই — নিচের message copy করে পাঠান\\');return false"'}><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.1-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1-1.6-.8-2.6-1.4-3.7-3.2-.3-.5.3-.5.8-1.5.1-.2 0-.4 0-.5 0-.1-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4 0 1.4 1 2.8 1.2 3 .1.2 2 3.1 4.9 4.3 2.9 1.2 2.9.8 3.4.8.5 0 1.7-.7 1.9-1.3.2-.7.2-1.2.2-1.3-.1-.2-.3-.2-.6-.3z"/><path d="M12 2a10 10 0 0 0-8.5 15.3L2 22l4.8-1.5A10 10 0 1 0 12 2zm0 18a8 8 0 0 1-4.1-1.1l-.3-.2-2.9.9.9-2.8-.2-.3A8 8 0 1 1 12 20z"/></svg> WhatsApp</a>
+       <a class="btn wa" target="_blank" rel="noopener" href="${wa?('https://wa.me/'+wa+'?text='+encodeURIComponent(p)):'#'}" ${wa?'':'onclick="return false" title="phone নেই — নিচের message copy করুন"'}><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.1-1.7-.8-2-.9-.3-.1-.5-.1-.7.1-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1-1.6-.8-2.6-1.4-3.7-3.2-.3-.5.3-.5.8-1.5.1-.2 0-.4 0-.5 0-.1-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4 0 1.4 1 2.8 1.2 3 .1.2 2 3.1 4.9 4.3 2.9 1.2 2.9.8 3.4.8.5 0 1.7-.7 1.9-1.3.2-.7.2-1.2.2-1.3-.1-.2-.3-.2-.6-.3z"/><path d="M12 2a10 10 0 0 0-8.5 15.3L2 22l4.8-1.5A10 10 0 1 0 12 2zm0 18a8 8 0 0 1-4.1-1.1l-.3-.2-2.9.9.9-2.8-.2-.3A8 8 0 1 1 12 20z"/></svg> WhatsApp</a>
        <a class="btn em" href="mailto:?subject=${encodeURIComponent('জরুরি: আপনার সাইট '+l.domain+' hacked')}&body=${encodeURIComponent(emailBody(l))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/></svg> Email</a>
        <a class="btn gg" target="_blank" rel="noopener" href="${googleQ(l)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Google প্রমাণ</a>
        <a class="btn gg" target="_blank" rel="noopener" href="${sucuri(l)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Sucuri scan</a>
