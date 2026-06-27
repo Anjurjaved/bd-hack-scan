@@ -59,7 +59,8 @@ def _category(eff):
     return "gambling"
 
 
-def score(signals):
+def score(signals, ctx=None):
+    ctx = ctx or {}
     spam = [s for s in signals if s.get("bucket") != "control"]
     challenge = any(s["layer"].startswith("L18") for s in signals)
 
@@ -124,6 +125,26 @@ def score(signals):
             evidence.append({"layer": s["layer"], "url": u[:300], "match": s["match"][:160]})
         if len(evidence) >= 12:
             break
+    # ---- genuine-vs-hacked gate (keep hacked legit businesses; drop genuine gambling/spam sites) ----
+    # stealth signals — things a genuine gambling site has NO reason to do (it shows content openly);
+    # their presence = injection hidden inside someone else's site = a HACK.
+    stealth = any(l in layers_present for l in ("L2UACLOAK", "L3REFCLOAK", "L12IPCLOAK", "L13INNERCLOAK",
+                                                "L17HIDDEN", "L20RELAY", "L16HDR"))
+    malware_deface = any(l in layers_present for l in ("L14CAMPAIGN", "L8IFRAME", "L10DEFACE", "L19SHELL"))
+    doorway = any(l in layers_present for l in ("L11REST", "L11SITEMAP", "L5DENSITY", "L16FEED", "L20SHAPE", "L20SCRIPT"))
+    homepage_open = "L1KW_STRONG" in layers_present
+    hack_fp = stealth or malware_deface or (doorway and not homepage_open)   # hack fingerprint
+    spammy = bool(ctx.get("domain_spammy"))          # gambling brand in the domain name
+    identity = bool(ctx.get("bd_signal"))            # real BD business identity present
+    if spammy or (homepage_open and not hack_fp and not identity):
+        status, confirmed, flagged = "spam_site", 0, False    # genuine/expired-domain gambling — NOT a client
+    elif verdict == "CONFIRM_CANDIDATE":
+        status, confirmed, flagged = "lead", 1, True
+    elif verdict == "SUSPECT":
+        status, confirmed, flagged = "review", 0, True
+    else:
+        status, confirmed, flagged = "clean", 0, False
+
     return {
         "verdict": verdict,
         "posterior": round(posterior, 4),
@@ -134,6 +155,7 @@ def score(signals):
         "proof_url": (lead["url"] if lead else ""),
         "layers": layers,
         "evidence": evidence,
-        "confirmed": 1 if verdict == "CONFIRM_CANDIDATE" else 0,
-        "flagged": verdict in ("CONFIRM_CANDIDATE", "SUSPECT"),
+        "status": status,
+        "confirmed": confirmed,
+        "flagged": flagged,
     }

@@ -70,6 +70,11 @@ export default {
       if (request.method === "GET" && path === "/api/feed") return await apiFeed(env, url);
       if (request.method === "GET" && path === "/") return json({ ok: true, service: "bd-hack-audit-api", endpoints: ["/api/stats", "/api/leads", "/api/feed", "/health"] });
 
+      // public write: dashboard "not a lead" toggle (low-stakes, reversible)
+      if (request.method === "POST" && path === "/reject") {
+        return await rejectLead(env, await request.json().catch(() => ({})));
+      }
+
       // ---- authed writes ----
       if (request.method === "POST") {
         if (!authed(request, env)) return bad("unauthorized", 401);
@@ -243,13 +248,14 @@ async function ingest(env, body) {
     if (catCount[cat] !== undefined && conf) catCount[cat]++;
     stmts.push(
       env.DB.prepare(
-        "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage1_score,stage2_verdict,stage2_reason,stage2_category,confirmed,pass_no,first_ts,ts,evidence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage1_score,stage2_verdict,stage2_reason,stage2_category,confirmed,pass_no,first_ts,ts,evidence,is_bd,biz_type,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
       ).bind(
         dom, (f.business || "").slice(0, 200), (f.phone || "").slice(0, 40), cat,
         (f.layers || "").slice(0, 200), (f.proof_snippet || "").slice(0, 600), (f.proof_url || "").slice(0, 300),
         Number(f.http_status) || 0, Number(f.stage1_score) || 0,
         (f.stage2_verdict || "").slice(0, 20), (f.stage2_reason || "").slice(0, 400), (f.stage2_category || "").slice(0, 30),
-        conf, Number(body.pass_no) || 1, now, now, (f.evidence || "").slice(0, 4000)
+        conf, Number(body.pass_no) || 1, now, now, (f.evidence || "").slice(0, 4000),
+        f.is_bd ? 1 : 0, (f.biz_type || "").slice(0, 30), (f.status || "lead").slice(0, 16)
       )
     );
     // live feed: only confirmed (keeps the feed signal-rich + small)
@@ -348,17 +354,31 @@ async function apiStats(env, ctx) {
 
 async function apiLeads(env, url) {
   const cat = url.searchParams.get("category");
+  const region = url.searchParams.get("region");   // bd | intl
+  const biz = url.searchParams.get("biz");
   const onlyConfirmed = url.searchParams.get("confirmed") !== "0";
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10) || 200, 1000);
   const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
-  let sql = "SELECT id,domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,ts,evidence FROM findings WHERE 1=1";
+  let sql = "SELECT id,domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,ts,evidence,is_bd,biz_type,status FROM findings WHERE status != 'rejected'";
   const binds = [];
   if (onlyConfirmed) sql += " AND confirmed=1";
+  if (region === "bd") sql += " AND is_bd=1";
+  else if (region === "intl") sql += " AND is_bd=0";
   if (cat) { sql += " AND category=?"; binds.push(cat); }
+  if (biz) { sql += " AND biz_type=?"; binds.push(biz); }
   sql += " ORDER BY ts DESC LIMIT ? OFFSET ?";
   binds.push(limit, offset);
   const rs = await env.DB.prepare(sql).bind(...binds).all();
   return json({ ok: true, leads: rs.results || [], limit, offset });
+}
+
+// Public (the dashboard's "not a lead" button) — toggles a finding's status.
+async function rejectLead(env, body) {
+  const id = Number(body.id);
+  if (!id) return bad("id required");
+  const status = body.status === "lead" ? "lead" : "rejected";
+  await env.DB.prepare("UPDATE findings SET status=? WHERE id=?").bind(status, id).run();
+  return json({ ok: true, id, status });
 }
 
 async function apiFeed(env, url) {

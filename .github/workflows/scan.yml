@@ -36,6 +36,9 @@ jobs:
         env:
           API_BASE: ${{ secrets.API_BASE }}
           SHARED_TOKEN: ${{ secrets.SHARED_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          VERIFY_PROVIDER: "groq"
+          VERIFY_CONC: "8"
           WORKER_ID: "w${{ matrix.worker }}"
           JOB_MINUTES: "25"
           SCAN_CONC: "50"

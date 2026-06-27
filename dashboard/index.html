@@ -109,7 +109,8 @@
 
   <div class="tabs" id="tabs">
     <div class="tab on" data-v="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> ওভারভিউ</div>
-    <div class="tab" data-v="leads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg> Hacked Leads <span class="badge" id="leadBadge">0</span></div>
+    <div class="tab" data-v="leads" data-region="bd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg> BD Leads <span class="badge" id="leadBadge">0</span></div>
+    <div class="tab" data-v="leads" data-region="intl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg> International <span class="badge" id="intlBadge" style="background:var(--muted)">0</span></div>
     <div class="tab" data-v="sources"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M5 10l7-7 7 7"/></svg> উৎস / Harvest</div>
     <div class="tab" data-v="system"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg> Workers / System</div>
     <div class="tab" data-v="feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Live Feed</div>
@@ -131,7 +132,7 @@
   <!-- LEADS -->
   <div class="view" id="v-leads">
     <div class="panel">
-      <h2>confirmed hacked businesses — ক্লিক করলে আক্রান্ত পেজ ও outreach<small id="leadHint"></small></h2>
+      <h2><span id="regionLabel">বাংলাদেশি</span> hacked businesses — ক্লিক করলে আক্রান্ত পেজ ও outreach<small id="leadHint"></small></h2>
       <div class="toolbar">
         <input id="leadSearch" placeholder="domain বা business খুঁজুন…" oninput="renderLeads()" />
         <span class="chip on" data-c="" onclick="setCat(this)">সব</span>
@@ -143,7 +144,8 @@
         <span class="chip" data-c="cloak" onclick="setCat(this)">cloak</span>
         <span class="chip" data-c="redirect" onclick="setCat(this)">redirect</span>
       </div>
-      <div class="scroll"><table id="leads"><thead><tr><th>domain</th><th>business</th><th>category</th><th>আক্রান্ত প্রমাণ</th><th>phone</th><th>when</th></tr></thead><tbody></tbody></table></div>
+      <div class="filters" id="bizFilter" style="padding:0 15px 11px;display:flex;gap:7px;flex-wrap:wrap"></div>
+      <div class="scroll"><table id="leads"><thead><tr><th>domain</th><th>business</th><th>type</th><th>category</th><th>আক্রান্ত</th><th>phone</th><th>when</th></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
 
@@ -187,12 +189,13 @@ const bn=n=>(n==null?"—":Number(n).toLocaleString('en-US')).replace(/[0-9]/g,d
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ago=ts=>{if(!ts)return"—";const s=Math.floor(Date.now()/1000)-ts;if(s<60)return bn(s)+" সেকেন্ড আগে";if(s<3600)return bn(Math.floor(s/60))+" মিনিট আগে";if(s<86400)return bn(Math.floor(s/3600))+" ঘণ্টা আগে";return bn(Math.floor(s/86400))+" দিন আগে";};
 const CAT={gambling:'জুয়া/ক্যাসিনো',pharma:'ওষুধ স্প্যাম',adult:'অ্যাডাল্ট',cloak:'cloaking',deface:'defacement',redirect:'redirect',foreign_lang:'বিদেশি ভাষা',malware:'malware'};
-let LEADS=[], curCat="", STATS={};
+let LEADS=[], curCat="", curRegion="bd", curBiz="", STATS={};
 
 // ---- tabs ----
 document.getElementById('tabs').onclick=e=>{const t=e.target.closest('.tab');if(!t)return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
-  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+t.dataset.v));};
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+t.dataset.v));
+  if(t.dataset.region){curRegion=t.dataset.region;curBiz="";renderLeads();}};
 
 // ---- charts ----
 function lineChart(svg,series,max,colors){const W=800,H=190,P=6;svg.innerHTML="";if(!series[0]||series[0].length<2){svg.innerHTML='<text x="400" y="95" text-anchor="middle" fill="#5b7088" font-size="13" font-family="Inter">data নেই</text>';return;}
@@ -248,18 +251,24 @@ function renderStats(s){
 }
 
 // ---- leads ----
-function setCat(el){curCat=el.dataset.c;document.querySelectorAll('#v-leads .chip').forEach(x=>x.classList.toggle('on',x===el));renderLeads();}
+function setCat(el){curCat=el.dataset.c;el.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===el));renderLeads();}
+function setBiz(t){curBiz=t;renderLeads();}
+function renderBizChips(){const el=document.getElementById('bizFilter');const types=[...new Set(LEADS.filter(l=>curRegion==='bd'?l.is_bd:!l.is_bd).map(l=>l.biz_type).filter(Boolean))].sort();el.innerHTML=`<span class="chip ${!curBiz?'on':''}" onclick="setBiz('')">সব type</span>`+types.map(t=>`<span class="chip ${curBiz===t?'on':''}" onclick="setBiz('${t}')">${esc(t)}</span>`).join('');}
+function updateBadges(){document.getElementById('leadBadge').textContent=bn(LEADS.filter(l=>l.is_bd).length);document.getElementById('intlBadge').textContent=bn(LEADS.filter(l=>!l.is_bd).length);}
+async function rejectLead(id){if(!confirm('এই lead সরিয়ে দেবেন? (এটা lead নয় হিসেবে চিহ্নিত হবে)'))return;try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:id,status:'rejected'})});}catch(e){}LEADS=LEADS.filter(l=>l.id!==id);closeModal();updateBadges();renderLeads();}
 async function loadLeads(){
   try{const r=await(await fetch(API+"/api/leads?limit=1000",{cache:'no-store'})).json();LEADS=r.leads||[];
-    document.getElementById('leadBadge').textContent=bn(LEADS.length);renderLeads();}catch(e){}
+    updateBadges();renderLeads();}catch(e){}
 }
 function renderLeads(){
   const q=(document.getElementById('leadSearch').value||"").toLowerCase();
-  let rows=LEADS.filter(l=>(!curCat||l.category===curCat)&&(!q||(l.domain||"").toLowerCase().includes(q)||(l.business||"").toLowerCase().includes(q)));
-  document.querySelector('#leads tbody').innerHTML=rows.length?rows.map((l,i)=>{
+  document.getElementById('regionLabel').textContent=curRegion==='bd'?'বাংলাদেশি':'International';
+  renderBizChips();
+  let rows=LEADS.filter(l=>(curRegion==='bd'?l.is_bd:!l.is_bd)&&(!curCat||l.category===curCat)&&(!curBiz||l.biz_type===curBiz)&&(!q||(l.domain||"").toLowerCase().includes(q)||(l.business||"").toLowerCase().includes(q)));
+  document.querySelector('#leads tbody').innerHTML=rows.length?rows.map(l=>{
     let ev=[];try{ev=JSON.parse(l.evidence||"[]")}catch(e){}
     const np=ev.length||(l.proof_url?1:0);
-    return `<tr class="lead-row" onclick="openLead(${LEADS.indexOf(l)})"><td><span class="mono">${esc(l.domain)}</span></td><td>${esc(l.business)||'—'}</td><td><span class="tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></td><td class="proof">${bn(np)} পেজ · ${esc((l.proof_snippet||'').slice(0,40))}</td><td class="mono">${esc(l.phone)||'—'}</td><td>${ago(l.ts)}</td></tr>`;}).join(''):'<tr><td colspan="6" class="empty">কোনো lead নেই</td></tr>';
+    return `<tr class="lead-row" onclick="openLead(${LEADS.indexOf(l)})"><td><span class="mono">${esc(l.domain)}</span></td><td>${esc(l.business)||'—'}</td><td>${l.biz_type?`<span class="tag" style="background:#eef2f9;color:#456a8a">${esc(l.biz_type)}</span>`:'—'}</td><td><span class="tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></td><td class="proof">${bn(np)} পেজ</td><td class="mono">${esc(l.phone)||'—'}</td><td>${ago(l.ts)}</td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">কোনো lead নেই</td></tr>';
   document.getElementById('leadHint').textContent=bn(rows.length)+" lead";
 }
 
@@ -298,6 +307,7 @@ function openLead(idx){
   const evHtml=ev.length?ev.map(e=>`<div class="ev">${e.layer?`<div class="el">${esc(e.layer)}</div>`:''}<a class="eu" href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.url)}</a>${e.match?`<div class="em">⮞ ${esc(e.match)}</div>`:''}</div>`).join(''):'<div class="empty">এই lead-টি পুরোনো scan — পরের scan-এ বিস্তারিত আক্রান্ত পেজ আসবে। আপাতত প্রমাণ: '+esc(l.proof_snippet||l.proof_url||'')+'</div>';
   document.getElementById('mBody').innerHTML=
     `<div class="kv"><span class="k">verdict</span><span><b>${esc(l.stage2_verdict||'confirmed')}</b> · ${esc(l.stage2_reason||'')}</span>
+      <span class="k">type · region</span><span>${esc(l.biz_type||'—')} · ${l.is_bd?'বাংলাদেশি':'International'}</span>
       <span class="k">layers</span><span class="mono">${esc(l.layers||'')}</span>
       <span class="k">HTTP</span><span>${bn(l.http_status||0)}</span>
       <span class="k">phone</span><span class="mono">${esc(l.phone||'—')}</span>
@@ -310,6 +320,7 @@ function openLead(idx){
        <a class="btn gg" target="_blank" rel="noopener" href="${googleQ(l)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Google প্রমাণ</a>
        <a class="btn gg" target="_blank" rel="noopener" href="${sucuri(l)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Sucuri scan</a>
        <button class="btn cp" onclick="navigator.clipboard.writeText(document.getElementById('pitchTxt').textContent);this.textContent='✓ copied'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> message copy</button>
+       <button class="btn" style="background:#fde8eb;color:#c0263a;border-color:#f3c2cb" onclick="rejectLead(${l.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg> এটা lead না</button>
      </div>
      <div class="pitch" id="pitchTxt">${esc(p)}</div>`;
   document.getElementById('modalBg').classList.add('on');document.body.style.overflow='hidden';

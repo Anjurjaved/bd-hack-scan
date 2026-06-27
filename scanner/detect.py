@@ -22,6 +22,7 @@ import asyncio
 import httpx
 from urllib.parse import urlparse
 import signatures as S
+import classify
 
 UA_BR = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 UA_GB = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
@@ -277,6 +278,12 @@ async def scan_domain(client, domain):
         except Exception:
             pass
 
+    # classify only flagged candidates (cheap; used to keep the lead list clean)
+    if sigs:
+        res["domain_spammy"] = classify.domain_spammy(reg)
+        res["bd_signal"] = classify.bd_signal(reg, visB)
+        res["biz_type"] = classify.biz_type(reg, res.get("title", ""), visB)
+        res["excerpt"] = visB[:3000]
     return res
 
 
