@@ -103,8 +103,15 @@ async def scan_batch(scan_client, llm_client, groq_pool, domains):
                 biz = v.get("business_type") or biz
                 verdict = "groq-" + cls
                 reason = "groq:%s — %s" % (cls, v.get("reason", ""))
-            elif sc["status"] == "spam_site":
-                return       # groq unavailable -> heuristic dropped it
+            else:
+                # Groq unavailable (rate-limited). Never promote an UNVERIFIED non-BD
+                # gambling/adult hit to a confirmed lead — a genuine casino on WordPress
+                # has the same doorway/REST signals as a hacked business. Park it for review.
+                if sc["status"] == "spam_site":
+                    return   # heuristic already dropped it
+                if sc["category"] in ("gambling", "adult") and not res.get("bd_signal"):
+                    status, confirmed, verdict = "review", 0, "unverified-" + sc["category"]
+                    reason = "groq unavailable; non-BD %s parked for review" % sc["category"]
         elif sc["status"] == "spam_site":
             return
 

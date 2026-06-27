@@ -15,8 +15,11 @@ import re
 # ---- EXCLUDE signal: gambling/adult brand IN THE REGISTRABLE DOMAIN (never the path) ----
 SPAMMY_DOMAIN = re.compile(
     r'casino|cassino|kasino|kasyno|kazino|cazino|slot|togel|toto|judi|gacor|maxwin|sbobet|bocoran|'
-    r'1xbet|melbet|betwinner|mostbet|parimatch|4rabet|jeetbuzz|jeetwin|bajilive|baji999|betvisa|bettilt|'
+    r'1xbet|melbet|betwinner|mostbet|mostplay|parimatch|4rabet|jeetbuzz|jeetwin|jeetbaji|betvisa|bettilt|'
     r'glorycasino|marvelbet|crickex|linebet|pussy888|mega888|joker123|918kiss|bandartogel|'
+    # BD-facing betting brands (baji/babu88/krikya/jaya9 families) + common intl books
+    r'baji|babu88|krikya|jaya9|nagad88|smilebet|jilibet|fancywin|crazytime|khelabet|betbuzz|'
+    r'bet365|22bet|dafabet|fun88|1win|rajabets|pinup|pin-up|stake\.|wagering|'
     r'pornhub|xvideos|xnxx|sexcam|escortservice', re.I)
 SPAMMY_TLD = re.compile(r'\.(bet|casino|poker|porn|sex|xxx|adult)$', re.I)
 
