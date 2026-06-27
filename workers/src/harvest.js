@@ -53,6 +53,46 @@ async function insertDomains(env, source, rows) {
   return inserted;
 }
 
+async function setCounter(env, metric, v) {
+  await env.DB.prepare("INSERT INTO counters (metric,value) VALUES (?,?) ON CONFLICT(metric) DO UPDATE SET value=?").bind(metric, v, v).run();
+}
+async function logHarvest(env, source, detail) {
+  await env.DB.prepare("INSERT INTO events (kind,domain,detail,ts) VALUES ('harvest',?,?,?)").bind(source, detail.slice(0, 200), Math.floor(Date.now() / 1000)).run();
+}
+async function readCappedH(r, max) {
+  if (!r.body) return (await r.text()).slice(0, max);
+  const reader = r.body.getReader(); const chunks = []; let n = 0;
+  try { while (n < max) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); n += value.length; } } catch (e) {}
+  try { await reader.cancel(); } catch (e) {}
+  const buf = new Uint8Array(n); let o = 0; for (const c of chunks) { buf.set(c.subarray(0, Math.max(0, n - o)), o); o += c.length; }
+  return new TextDecoder("utf-8", { fatal: false }).decode(buf.subarray(0, max));
+}
+
+// Common Crawl CDX — *.bd across the whole crawled web. FREE, no key, no signup, Worker-friendly.
+// Walks one page per run (cursor); resets at the last page. Latest index id in CC_INDEX var.
+export async function harvestCommonCrawl(env) {
+  const idx = env.CC_INDEX || "CC-MAIN-2026-25";
+  const cur = await env.DB.prepare("SELECT value FROM counters WHERE metric='cc_page'").first();
+  let page = cur ? Number(cur.value) : 0;
+  try {
+    const r = await fetch(`https://index.commoncrawl.org/${idx}-index?url=*.bd&output=json&page=${page}`, { headers: { "user-agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(28000) });
+    if (r.status === 404 || r.status === 400) { await setCounter(env, "cc_page", 0); return { page, reset: true }; }
+    const txt = await readCappedH(r, 320000); // ~first 800 records of the page (CPU/mem safe)
+    const found = new Map();
+    for (const line of txt.split("\n")) {
+      if (!line.trim()) continue;
+      let u; try { u = JSON.parse(line).url; } catch (e) { continue; }
+      const dom = registrable(String(u || "").replace(/^https?:\/\//, "").split("/")[0]);
+      if (dom && dom.endsWith(".bd") && !found.has(dom)) found.set(dom, { domain: dom, bd: 40 });
+      if (found.size >= 700) break;
+    }
+    const inserted = await insertDomains(env, "commoncrawl", [...found.values()]);
+    await setCounter(env, "cc_page", page + 1);
+    await logHarvest(env, "commoncrawl", `page ${page}: ${found.size} .bd, ${inserted} new`);
+    return { page, found: found.size, inserted };
+  } catch (e) { return { page, error: String(e).slice(0, 70) }; }
+}
+
 export async function harvestReverseIp(env) {
   const SEEDN = Number(env.RIP_SEED || 25), MAXIP = Number(env.RIP_MAX_IPS || 12);
   const cur = await env.DB.prepare("SELECT value FROM counters WHERE metric='rip_seed_cursor'").first();
@@ -145,6 +185,7 @@ export async function harvestDirectories(env) {
   const inserted = await insertDomains(env, "directories", [...found.values()]);
   await env.DB.prepare("INSERT INTO counters (metric,value) VALUES (?,?) ON CONFLICT(metric) DO UPDATE SET value=?").bind("dir_off_" + src.key, off, off).run();
   await bumpCursor(env, ci);
+  await logHarvest(env, "directories", `${src.key}: ${batch.length} pages -> ${found.size} sites, ${inserted} new`);
   return { source: src.key, listings: locs.length, fetched: batch.length, found: found.size, inserted };
 }
 async function bumpCursor(env, ci) {
@@ -152,18 +193,24 @@ async function bumpCursor(env, ci) {
 }
 
 export async function harvestCrtsh(env) {
-  try {
-    const r = await fetch("https://crt.sh/?q=%25.bd&output=json&exclude=expired&limit=4000", { headers: { "user-agent": "Mozilla/5.0", accept: "application/json" }, signal: AbortSignal.timeout(25000) });
-    if (!r.ok) return { inserted: 0 };
-    const arr = await r.json();
-    const found = new Map();
-    for (const row of (Array.isArray(arr) ? arr : []).slice(0, 6000)) {
-      for (const nm of String(row.name_value || "").split(/\n/)) {
-        const dom = registrable(nm);
-        if (dom && dom.endsWith(".bd") && !found.has(dom)) found.set(dom, { domain: dom, bd: 40 });
+  // crt.sh is slow/overloaded — try twice, accept whatever returns.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch("https://crt.sh/?q=%25.bd&output=json&exclude=expired", { headers: { "user-agent": "Mozilla/5.0", accept: "application/json" }, signal: AbortSignal.timeout(30000) });
+      if (!r.ok) continue;
+      const txt = await readCappedH(r, 3000000);
+      let arr; try { arr = JSON.parse(txt); } catch (e) { continue; }
+      const found = new Map();
+      for (const row of (Array.isArray(arr) ? arr : []).slice(0, 20000)) {
+        for (const nm of String(row.name_value || "").split(/\n/)) {
+          const dom = registrable(nm);
+          if (dom && dom.endsWith(".bd") && !found.has(dom)) found.set(dom, { domain: dom, bd: 40 });
+        }
       }
-    }
-    const inserted = await insertDomains(env, "crtsh", [...found.values()]);
-    return { found: found.size, inserted };
-  } catch (e) { return { inserted: 0, error: String(e).slice(0, 80) }; }
+      const inserted = await insertDomains(env, "crtsh", [...found.values()]);
+      await logHarvest(env, "crtsh", `${found.size} .bd identities, ${inserted} new`);
+      return { found: found.size, inserted };
+    } catch (e) { if (attempt === 1) return { inserted: 0, error: String(e).slice(0, 80) }; }
+  }
+  return { inserted: 0, error: "crt.sh unavailable" };
 }

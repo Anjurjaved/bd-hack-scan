@@ -361,8 +361,14 @@ async function ingest(env, findings, scanned, errors) {
 // ---- one cron tick: claim N unscanned domains, scan, ingest ----
 export async function scanTick(env, n) {
   const N = n || Number(env.SCAN_PER_TICK || 5);
+  // Multi-Worker sharding: each scanner Worker owns rowid % SHARDS == SHARD, so N Workers
+  // partition the queue with NO overlap. Single Worker => SHARDS=1 (everything).
+  const SHARDS = Math.max(1, Number(env.SCAN_SHARDS || 1));
+  const SHARD = Math.max(0, Number(env.SCAN_SHARD || 0)) % SHARDS;
   // BD-relevant (.bd / BD-hosted, higher bd_score) first so cron ticks aren't wasted on global junk
-  const rs = await env.DB.prepare("SELECT rowid,domain,business,phone FROM domains WHERE pass_no=0 ORDER BY bd_score DESC, rowid LIMIT ?").bind(N).all();
+  const rs = await env.DB.prepare(
+    "SELECT rowid,domain,business,phone FROM domains WHERE pass_no=0 AND (rowid % ?)=? ORDER BY bd_score DESC, rowid LIMIT ?"
+  ).bind(SHARDS, SHARD, N).all();
   const rows = rs.results || [];
   if (!rows.length) return { scanned: 0, flagged: 0 };
   // claim (mark scanned) up front so overlapping ticks don't double-scan

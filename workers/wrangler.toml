@@ -3,10 +3,9 @@ main = "src/index.js"
 compatibility_date = "2026-01-01"
 workers_dev = true
 
-# Every minute: scan a small batch of unscanned domains (the Worker cron scan engine).
-# Every 15 min: housekeeping. Every 20 min: reverse-IP harvest (BD firehose). Every 3h: crt.sh .bd.
+# Every min: scan. */15 housekeeping. */20 Common Crawl *.bd. 37 */2 directories. 13 */6 crt.sh.
 [triggers]
-crons = ["* * * * *", "*/15 * * * *", "*/20 * * * *", "13 */3 * * *"]
+crons = ["* * * * *", "*/15 * * * *", "*/20 * * * *", "37 */2 * * *", "13 */6 * * *"]
 
 # The live dashboard is served as static assets by this same Worker.
 # Static files (index.html, config.js, fonts) are served first; any path
@@ -19,9 +18,37 @@ binding = "DB"
 database_name = "bd-hack-audit"
 database_id = "5a01635e-b9fe-4b28-a684-ba7007118f2a"
 
+# Service bindings: the main cron fans out to these sibling scanner shards intra-account
+# (no HTTP-loop / workers.dev issues). Each runs scanTick for its slice in its own invocation.
+[[services]]
+binding = "SHARD1"
+service = "bd-scan-1"
+[[services]]
+binding = "SHARD2"
+service = "bd-scan-2"
+[[services]]
+binding = "SHARD3"
+service = "bd-scan-3"
+[[services]]
+binding = "SHARD4"
+service = "bd-scan-4"
+[[services]]
+binding = "SHARD5"
+service = "bd-scan-5"
+[[services]]
+binding = "SHARD6"
+service = "bd-scan-6"
+[[services]]
+binding = "SHARD7"
+service = "bd-scan-7"
+
 # SHARED_TOKEN is set as a secret (not here):  wrangler secret put SHARED_TOKEN
 # It authorizes the scanner + harvester (write endpoints). Dashboard reads are public.
 [vars]
 BATCH_SIZE = "1000"
 SCAN_PER_TICK = "4"
 GROQ_MODEL = "llama-3.1-8b-instant"
+CC_INDEX = "CC-MAIN-2026-25"
+SCAN_SHARDS = "8"
+SCAN_SHARD = "0"
+SCAN_SUBDOMAIN = "javed-it"

@@ -1,5 +1,5 @@
 import { scanTick, scanDomain } from "./scan.js";
-import { harvestReverseIp, harvestCrtsh, harvestDirectories } from "./harvest.js";
+import { harvestReverseIp, harvestCrtsh, harvestDirectories, harvestCommonCrawl } from "./harvest.js";
 
 /**
  * BD Hack-Audit — Cloudflare Worker API
@@ -95,7 +95,8 @@ export default {
         if (path === "/harvest_now") {
           if (body.source === "crtsh") return json({ ok: true, ...(await harvestCrtsh(env)) });
           if (body.source === "reverse") return json({ ok: true, ...(await harvestReverseIp(env)) });
-          return json({ ok: true, ...(await harvestDirectories(env)) });
+          if (body.source === "directories") return json({ ok: true, ...(await harvestDirectories(env)) });
+          return json({ ok: true, ...(await harvestCommonCrawl(env)) });
         }
         if (path === "/heartbeat") return await heartbeat(env, body);
         if (path === "/keyusage") return await keyusage(env, body);
@@ -109,9 +110,10 @@ export default {
   async scheduled(event, env, ctx) {
     const c = event.cron;
     if (c === "*/15 * * * *") ctx.waitUntil(housekeeping(env));
-    else if (c === "*/20 * * * *") ctx.waitUntil((env.HACKERTARGET_KEY ? harvestReverseIp(env) : harvestDirectories(env)).catch(() => {})); // BD harvest (reverse-IP if key, else directories)
-    else if (c === "13 */3 * * *") ctx.waitUntil(harvestCrtsh(env).catch(() => {}));        // crt.sh .bd identities
-    else ctx.waitUntil(scanTick(env).catch(() => {}));                                       // every minute: scan
+    else if (c === "*/20 * * * *") ctx.waitUntil(harvestCommonCrawl(env).catch(() => {}));   // Common Crawl *.bd (free, reliable firehose)
+    else if (c === "37 */2 * * *") ctx.waitUntil(harvestDirectories(env).catch(() => {}));   // BD business directories (.com sites)
+    else if (c === "13 */6 * * *") ctx.waitUntil(harvestCrtsh(env).catch(() => {}));         // crt.sh .bd identities
+    else ctx.waitUntil(scanFanout(env).catch(() => {}));                                       // every minute: scan (shard 0 + fan-out to shards 1..N)
   },
 };
 
@@ -431,6 +433,22 @@ async function apiSeed(env, url) {
 // ===========================================================================
 // HOUSEKEEPING (cron) — trim events, requeue stale claims, recompute totals
 // ===========================================================================
+// Every-minute scan: main does shard 0 itself, then HTTP-fans-out to sibling shard Workers
+// (bd-scan-1..N-1) so each runs scanTick in its own invocation (own CPU + subrequest budget).
+// This gives free N-way parallelism without needing N cron triggers (Cloudflare caps those).
+async function scanFanout(env) {
+  const shards = Math.max(1, Number(env.SCAN_SHARDS || 1));
+  const sub = env.SCAN_SUBDOMAIN || "javed-it";
+  const tasks = [scanTick(env)];
+  const hdr = { headers: { authorization: "Bearer " + (env.SHARED_TOKEN || "") } };
+  for (let i = 1; i < shards; i++) {
+    const svc = env["SHARD" + i];
+    if (svc) tasks.push(svc.fetch("https://shard/run", hdr).catch(() => {}));          // service binding (preferred)
+    else tasks.push(fetch(`https://bd-scan-${i}.${sub}.workers.dev/run`, hdr).catch(() => {})); // HTTP fallback
+  }
+  await Promise.all(tasks);
+}
+
 async function housekeeping(env) {
   const now = nowSec();
   // build scannable batches from freshly-harvested domains (race-free, single-threaded here)

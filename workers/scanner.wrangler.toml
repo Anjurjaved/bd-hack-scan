@@ -1,0 +1,16 @@
+# Config for the parallel scanner SHARD Workers (bd-scan-1, bd-scan-2, ...).
+# Deployed via deploy/deploy_scanners.sh with --name + --var SCAN_SHARD/SCAN_SHARDS.
+# Binds the SAME shared D1 as the main Worker; no static assets (scanners don't serve the dashboard).
+name = "bd-scan"
+main = "src/scan-worker.js"
+compatibility_date = "2026-01-01"
+workers_dev = true   # each shard gets a URL so the main Worker can fan-out to /run (no cron needed)
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bd-hack-audit"
+database_id = "5a01635e-b9fe-4b28-a684-ba7007118f2a"
+
+[vars]
+SCAN_PER_TICK = "4"
+GROQ_MODEL = "llama-3.1-8b-instant"
