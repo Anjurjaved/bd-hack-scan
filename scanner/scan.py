@@ -2,24 +2,19 @@
 """
 scan.py — the scan engine that runs inside every GitHub-Actions job.
 
-Loop:  claim a batch -> Stage-1 scan all its domains (async, high concurrency)
-       -> classify flagged -> ingest results -> heartbeat -> repeat until the
-       queue is empty or the time budget ends.
+Loop: claim a batch -> Stage-1 multi-layer scan each domain (detect.py, async,
+high concurrency) -> Bayesian fuse to a verdict (score.py) -> ingest findings ->
+heartbeat -> repeat until the queue is empty or the time budget ends.
 
-Stage-2 verdict (NO external LLM by default, so the Gemini pool stays free for
-the user's voice work):
-  * STRONG layers (cloaking, gambling iframe, sitemap doorway, search-density,
-    defacement, malware host) -> AUTO-CONFIRMED (verbatim proof is conclusive).
-  * WEAK keyword-only / foreign-title / plain redirect -> "needs-review" (shown
-    on the dashboard for a human glance), confirmed=0.
-  * Optional: set VERIFY_PROVIDER=groq (+GROQ_API_KEY) to LLM-verify the weak
-    bucket via verify.py — never touches Gemini.
+Verdict mapping (NO external LLM; Gemini pool stays free for the user's voice work):
+  CONFIRM_CANDIDATE -> confirmed=1   (hard signal, or posterior>=0.97 + 2 buckets)
+  SUSPECT           -> needs-review  (surfaced on the dashboard, confirmed=0)
+  CLEAN / NEEDS_BROWSER -> not flagged
 
 Stateless: all state lives in Cloudflare D1 behind the Worker API. Many of these
 run in parallel (the GitHub Actions matrix); each claims different batches.
 
-Env: API_BASE, SHARED_TOKEN, WORKER_ID, JOB_MINUTES(=300), SCAN_CONC(=120),
-     VERIFY_CONC(=6), VERIFY_PROVIDER(=none|groq|cerebras|openrouter)
+Env: API_BASE, SHARED_TOKEN, WORKER_ID, JOB_MINUTES(=300), SCAN_CONC(=50), DOMAIN_TIMEOUT(=75)
 """
 import os
 import sys
@@ -29,42 +24,17 @@ import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import detect
+import score as scoring
 
 API_BASE = os.environ.get("API_BASE", "").rstrip("/")
 TOKEN = os.environ.get("SHARED_TOKEN", "")
 WORKER_ID = os.environ.get("WORKER_ID", "job-" + str(os.getpid()))
 JOB_SECONDS = int(os.environ.get("JOB_MINUTES", "300")) * 60
-SCAN_CONC = int(os.environ.get("SCAN_CONC", "120"))
-VERIFY_CONC = int(os.environ.get("VERIFY_CONC", "6"))
-PROVIDER = os.environ.get("VERIFY_PROVIDER", "none").lower()
+SCAN_CONC = int(os.environ.get("SCAN_CONC", "50"))
+DOMAIN_TIMEOUT = float(os.environ.get("DOMAIN_TIMEOUT", "75"))
 
-# Cloudflare's edge 403s bot User-Agents; present a browser UA on Worker API calls.
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 AUTH = {"authorization": "Bearer " + TOKEN, "content-type": "application/json", "user-agent": _UA}
-
-# optional LLM verifier (only if a provider+key is configured)
-verifier = None
-if PROVIDER not in ("none", ""):
-    try:
-        import verify as verifier
-    except Exception:
-        verifier = None
-
-
-def mk_finding(sig, confirmed, verdict, reason, proof=None, category=None):
-    return {
-        "domain": sig["domain"], "business": sig.get("business", ""), "phone": sig.get("phone", ""),
-        "category": category or sig.get("category", ""),
-        "layers": ",".join(sig.get("layers", []))[:200],
-        "proof_snippet": (proof if proof is not None else sig.get("proof", "")),
-        "proof_url": sig.get("proof_url", ""),
-        "http_status": sig.get("http_status", 0),
-        "stage1_score": sig.get("score", 0),
-        "stage2_verdict": verdict,
-        "stage2_reason": reason,
-        "stage2_category": category or sig.get("category", ""),
-        "confirmed": confirmed,
-    }
 
 
 async def api(client, path, payload, tries=4):
@@ -79,49 +49,40 @@ async def api(client, path, payload, tries=4):
     return None
 
 
-async def scan_batch(scan_client, llm_pool, llm_client, domains):
+async def scan_batch(scan_client, domains):
     sem = asyncio.Semaphore(SCAN_CONC)
-    flagged, errors = [], 0
+    findings = []
+    errors = 0
 
     async def one(rec):
         nonlocal errors
         async with sem:
             try:
-                sig = await detect.scan_domain(scan_client, rec["domain"])
+                res = await asyncio.wait_for(detect.scan_domain(scan_client, rec["domain"]), timeout=DOMAIN_TIMEOUT)
             except Exception:
                 errors += 1
                 return
-            if sig.get("error"):
+            if res.get("error"):
                 errors += 1
                 return
-            if sig.get("flagged"):
-                sig["business"] = rec.get("business", "")
-                sig["phone"] = rec.get("phone", "")
-                flagged.append(sig)
+            sc = scoring.score(res.get("signals", []))
+            if not sc["flagged"]:
+                return
+            findings.append({
+                "domain": res["domain"], "business": rec.get("business", ""), "phone": rec.get("phone", ""),
+                "category": sc["category"],
+                "layers": ",".join(sc["layers"])[:200],
+                "proof_snippet": sc["proof"],
+                "proof_url": sc["proof_url"][:300],
+                "http_status": res.get("http_status", 0),
+                "stage1_score": sc["nbuckets"],
+                "stage2_verdict": sc["verdict"],
+                "stage2_reason": "posterior=%.3f buckets=%d%s" % (sc["posterior"], sc["nbuckets"], " HARD" if sc["hard"] else ""),
+                "stage2_category": sc["category"],
+                "confirmed": sc["confirmed"],
+            })
 
     await asyncio.gather(*(one(r) for r in domains))
-
-    findings, weak = [], []
-    for sig in flagged:
-        if sig.get("auto_confirm"):
-            findings.append(mk_finding(sig, 1, "auto-confirmed",
-                                       "conclusive injection signal (cloaking / iframe / sitemap / density / defacement / malware)"))
-        else:
-            weak.append(sig)
-
-    if verifier and llm_pool and getattr(llm_pool, "keys", None):
-        vsem = asyncio.Semaphore(VERIFY_CONC)
-
-        async def vone(sig):
-            async with vsem:
-                v = await verifier.verify(llm_pool, llm_client, sig)
-            findings.append(mk_finding(sig, v["confirmed"], v["verdict"], v["reason"],
-                                       proof=v.get("proof"), category=v.get("category")))
-        await asyncio.gather(*(vone(s) for s in weak))
-    else:
-        for sig in weak:
-            findings.append(mk_finding(sig, 0, "needs-review", "keyword/weak signal — manual review"))
-
     return findings, errors
 
 
@@ -130,12 +91,10 @@ async def main():
         print("FATAL: API_BASE and SHARED_TOKEN are required", file=sys.stderr)
         sys.exit(1)
     deadline = time.time() + JOB_SECONDS
-    llm_pool = verifier.Pool(PROVIDER) if verifier else None
     scanned_total, empty_strikes = 0, 0
 
-    limits = httpx.Limits(max_connections=SCAN_CONC + 20, max_keepalive_connections=40)
-    async with httpx.AsyncClient(limits=limits, verify=False) as scan_client, \
-               httpx.AsyncClient() as llm_client, \
+    limits = httpx.Limits(max_connections=SCAN_CONC * 6 + 20, max_keepalive_connections=40)
+    async with httpx.AsyncClient(limits=limits, verify=False, follow_redirects=True, http2=False) as scan_client, \
                httpx.AsyncClient() as ctl:
         while time.time() < deadline:
             claim = await api(ctl, "/claim", {"worker_id": WORKER_ID})
@@ -150,7 +109,7 @@ async def main():
             empty_strikes = 0
             bid, domains = claim["batch_id"], claim.get("domains", [])
             t0 = time.time()
-            findings, errors = await scan_batch(scan_client, llm_pool, llm_client, domains)
+            findings, errors = await scan_batch(scan_client, domains)
             scanned = len(domains)
             scanned_total += scanned
             confirmed = sum(f["confirmed"] for f in findings)

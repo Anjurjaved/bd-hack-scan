@@ -38,6 +38,6 @@ jobs:
           SHARED_TOKEN: ${{ secrets.SHARED_TOKEN }}
           WORKER_ID: "w${{ matrix.worker }}"
           JOB_MINUTES: "25"
-          SCAN_CONC: "120"
-          VERIFY_PROVIDER: "none"
+          SCAN_CONC: "50"
+          DOMAIN_TIMEOUT: "90"
         run: python scanner/scan.py

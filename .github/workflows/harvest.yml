@@ -1,0 +1,118 @@
+name: harvest
+
+# FREE Bangladesh-business-domain harvesters → hack-scanner queue.
+# Four sources run on STAGGERED crons (minutes offset, never :00 UTC) so they
+# never collide. The single `harvest` job maps each schedule to one source;
+# manual runs use the `source` input (default: all four, sequentially).
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Which harvester(s) to run"
+        type: choice
+        default: all
+        options:
+          - all
+          - crtsh
+          - directories
+          - osm
+          - reverse-ip
+  schedule:
+    # crt.sh — the .bd firehose — every ~2h, at :17 past odd-ish hours.
+    - cron: "17 */2 * * *"
+    # directories (Wikidata + Common Crawl) — every ~3h, offset to :37.
+    - cron: "37 */3 * * *"
+    # OpenStreetMap (Overpass) — once daily at 04:53 UTC.
+    - cron: "53 4 * * *"
+    # reverse-IP / shared-hosting neighbours — every ~6h at :07.
+    - cron: "7 */6 * * *"
+
+# Read-only: harvesters only POST to an external Worker, never touch the repo.
+permissions:
+  contents: read
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Resolve the source from either the schedule that triggered us or the
+    # manual input. Each cron line maps 1:1 to one harvester.
+    env:
+      SCHED_CRTSH: "17 */2 * * *"
+      SCHED_DIRECTORIES: "37 */3 * * *"
+      SCHED_OSM: "53 4 * * *"
+      SCHED_REVERSE_IP: "7 */6 * * *"
+
+    # One in-flight run per source: a slow run won't pile up behind the next
+    # cron. Manual `all` runs get their own group so they never block a cron.
+    concurrency:
+      group: harvest-${{ github.event.schedule || github.event.inputs.source || 'all' }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r harvester/requirements.txt
+
+      - name: Decide which source(s) to run
+        id: pick
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+          INPUT_SOURCE: ${{ github.event.inputs.source }}
+        run: |
+          set -euo pipefail
+          if [ -n "${SCHEDULE:-}" ]; then
+            case "$SCHEDULE" in
+              "$SCHED_CRTSH")       SOURCE=crtsh ;;
+              "$SCHED_DIRECTORIES") SOURCE=directories ;;
+              "$SCHED_OSM")         SOURCE=osm ;;
+              "$SCHED_REVERSE_IP")  SOURCE=reverse-ip ;;
+              *)                    SOURCE=all ;;
+            esac
+          else
+            SOURCE="${INPUT_SOURCE:-all}"
+          fi
+          echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
+          echo "Selected source: $SOURCE"
+
+      - name: Run harvester(s)
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          SHARED_TOKEN: ${{ secrets.SHARED_TOKEN }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -uo pipefail
+          run_one() {
+            local name="$1"
+            local file
+            case "$name" in
+              crtsh)       file=harvester/crtsh.py ;;
+              directories) file=harvester/directories.py ;;
+              osm)         file=harvester/osm.py ;;
+              reverse-ip)  file=harvester/reverse_ip.py ;;
+              *) echo "Unknown source: $name" >&2; return 1 ;;
+            esac
+            echo "::group::Running $name ($file)"
+            # Each harvester guards itself and exits 0 even on network failure,
+            # so one bad source never fails the whole workflow run.
+            python "$file" || echo "$name exited non-zero (handled)"
+            echo "::endgroup::"
+          }
+
+          SRC="${{ steps.pick.outputs.source }}"
+          if [ "$SRC" = "all" ]; then
+            for s in crtsh directories osm reverse-ip; do
+              run_one "$s"
+            done
+          else
+            run_one "$SRC"
+          fi
