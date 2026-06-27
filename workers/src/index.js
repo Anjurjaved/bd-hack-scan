@@ -76,6 +76,7 @@ export default {
         const body = await request.json().catch(() => ({}));
         if (path === "/harvest") return await harvest(env, body);
         if (path === "/build") return json({ ok: true, built: await buildBatches(env, 200) });
+        if (path === "/cursor") return await cursorEndpoint(env, body);
         if (path === "/claim") return await claim(env, body);
         if (path === "/ingest") return await ingest(env, body);
         if (path === "/heartbeat") return await heartbeat(env, body);
@@ -173,6 +174,20 @@ async function buildBatches(env, maxBatches = 80) {
     await env.DB.prepare("INSERT INTO counters (metric,value) VALUES ('next_batch_id',?) ON CONFLICT(metric) DO UPDATE SET value=?").bind(nextId, nextId).run();
   }
   return built;
+}
+
+// Per-source cursor (used by the paced global-ranked feeder). POST {source} reads;
+// POST {source, cursor} sets and reads back.
+async function cursorEndpoint(env, body) {
+  const source = (body.source || "").slice(0, 64);
+  if (!source) return bad("source required");
+  if (body.cursor != null) {
+    await env.DB.prepare(
+      "INSERT INTO source_state (source, cursor, last_run) VALUES (?,?,?) ON CONFLICT(source) DO UPDATE SET cursor=excluded.cursor, last_run=excluded.last_run"
+    ).bind(source, String(body.cursor), nowSec()).run();
+  }
+  const r = await env.DB.prepare("SELECT cursor FROM source_state WHERE source=?").bind(source).first();
+  return json({ ok: true, source, cursor: r ? r.cursor : null });
 }
 
 // ===========================================================================
