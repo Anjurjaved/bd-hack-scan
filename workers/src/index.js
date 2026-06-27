@@ -243,13 +243,13 @@ async function ingest(env, body) {
     if (catCount[cat] !== undefined && conf) catCount[cat]++;
     stmts.push(
       env.DB.prepare(
-        "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage1_score,stage2_verdict,stage2_reason,stage2_category,confirmed,pass_no,first_ts,ts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage1_score,stage2_verdict,stage2_reason,stage2_category,confirmed,pass_no,first_ts,ts,evidence) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
       ).bind(
         dom, (f.business || "").slice(0, 200), (f.phone || "").slice(0, 40), cat,
         (f.layers || "").slice(0, 200), (f.proof_snippet || "").slice(0, 600), (f.proof_url || "").slice(0, 300),
         Number(f.http_status) || 0, Number(f.stage1_score) || 0,
         (f.stage2_verdict || "").slice(0, 20), (f.stage2_reason || "").slice(0, 400), (f.stage2_category || "").slice(0, 30),
-        conf, Number(body.pass_no) || 1, now, now
+        conf, Number(body.pass_no) || 1, now, now, (f.evidence || "").slice(0, 4000)
       )
     );
     // live feed: only confirmed (keeps the feed signal-rich + small)
@@ -351,7 +351,7 @@ async function apiLeads(env, url) {
   const onlyConfirmed = url.searchParams.get("confirmed") !== "0";
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10) || 200, 1000);
   const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
-  let sql = "SELECT id,domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,ts FROM findings WHERE 1=1";
+  let sql = "SELECT id,domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,ts,evidence FROM findings WHERE 1=1";
   const binds = [];
   if (onlyConfirmed) sql += " AND confirmed=1";
   if (cat) { sql += " AND category=?"; binds.push(cat); }

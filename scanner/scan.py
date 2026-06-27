@@ -18,6 +18,7 @@ Env: API_BASE, SHARED_TOKEN, WORKER_ID, JOB_MINUTES(=300), SCAN_CONC(=50), DOMAI
 """
 import os
 import sys
+import json
 import time
 import asyncio
 import httpx
@@ -80,6 +81,7 @@ async def scan_batch(scan_client, domains):
                 "stage2_reason": "posterior=%.3f buckets=%d%s" % (sc["posterior"], sc["nbuckets"], " HARD" if sc["hard"] else ""),
                 "stage2_category": sc["category"],
                 "confirmed": sc["confirmed"],
+                "evidence": json.dumps(sc.get("evidence", []), ensure_ascii=False)[:4000],
             })
 
     await asyncio.gather(*(one(r) for r in domains))

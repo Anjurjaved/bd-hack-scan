@@ -115,6 +115,15 @@ def score(signals):
         lead = max(best.values(), key=lambda v: v[0])[1]
     category = _category(eff) if eff else ""
     layers = sorted(layers_present)
+    # evidence = the exact attacked pages (distinct URLs) + what was found on each
+    seen_u, evidence = set(), []
+    for s in eff:
+        u = s.get("url", "")
+        if u and u not in seen_u:
+            seen_u.add(u)
+            evidence.append({"layer": s["layer"], "url": u[:300], "match": s["match"][:160]})
+        if len(evidence) >= 12:
+            break
     return {
         "verdict": verdict,
         "posterior": round(posterior, 4),
@@ -124,6 +133,7 @@ def score(signals):
         "proof": (lead["match"] if lead else "")[:500],
         "proof_url": (lead["url"] if lead else ""),
         "layers": layers,
+        "evidence": evidence,
         "confirmed": 1 if verdict == "CONFIRM_CANDIDATE" else 0,
         "flagged": verdict in ("CONFIRM_CANDIDATE", "SUSPECT"),
     }
