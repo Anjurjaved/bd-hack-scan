@@ -168,7 +168,7 @@
   </div>
 
   <!-- FEED -->
-  <div class="view" id="v-feed"><div class="panel"><h2>live feed — confirmed hits</h2><div class="feed" id="feed"></div></div></div>
+  <div class="view" id="v-feed"><div class="panel"><h2>live feed — scan + harvest activity (কোন source কত domain আনল, কী hacked পাওয়া গেল)</h2><div class="feed" id="feed"></div></div></div>
 
   <footer>BD Hack-Audit · 100% free (GitHub Actions + Cloudflare) · তৈরি করেছে <a href="https://javeditsolution.com" target="_blank" rel="noopener noreferrer">Javed IT Solution</a></footer>
 </div>
@@ -355,7 +355,7 @@ function closeModal(){document.getElementById('modalBg').classList.remove('on');
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
 async function loadFeed(){try{const r=await(await fetch(API+"/api/feed?limit=60",{cache:'no-store'})).json();const f=r.feed||[];
-  document.getElementById('feed').innerHTML=f.length?f.map(x=>`<div class="it"><span class="when">${ago(x.ts)}</span><div><div class="dom">${esc(x.domain)}</div><div style="color:var(--muted);font-size:11.5px">${esc(x.detail)}</div></div></div>`).join(''):'<div class="empty">confirmed hit এলে এখানে live দেখা যাবে</div>';}catch(e){}}
+  document.getElementById('feed').innerHTML=f.length?f.map(x=>{const h=x.kind==='harvest';const tag=h?'<span class="tag t-redirect">সংগ্রহ</span>':'<span class="tag t-gambling">hacked</span>';return `<div class="it"><span class="when">${ago(x.ts)}</span><div><div class="dom">${tag} ${esc(x.domain)}</div><div style="color:var(--muted);font-size:11.5px">${esc(x.detail)}</div></div></div>`;}).join(''):'<div class="empty">scan / harvest activity এলে এখানে live দেখা যাবে</div>';}catch(e){}}
 
 tick();loadLeads();loadFeed();
 setInterval(tick,15000);setInterval(loadFeed,15000);setInterval(loadLeads,30000);
