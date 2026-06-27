@@ -334,6 +334,11 @@ async function apiStats(env, ctx) {
   const workers = (await env.DB.prepare("SELECT * FROM workers_heartbeat WHERE last_seen > ? ORDER BY last_seen DESC").bind(now - 900).all()).results || [];
   const keys = (await env.DB.prepare("SELECT * FROM key_usage WHERE day=? ORDER BY requests DESC").bind(dhakaDay(now)).all()).results || [];
   const recentRate = (await env.DB.prepare("SELECT COALESCE(SUM(scanned),0) s FROM hourly_stats WHERE hour=?").bind(dhakaHour(now)).first()) || { s: 0 };
+  // BD vs global split of the registry (the .bd subset is the monetizable core)
+  const bdRow = (await env.DB.prepare("SELECT COUNT(*) c FROM domains WHERE domain LIKE '%.bd'").first()) || { c: 0 };
+  const leadGeo = { bd: 0, intl: 0 };
+  for (const r of (await env.DB.prepare("SELECT is_bd, COUNT(*) c FROM findings WHERE confirmed=1 AND status!='rejected' GROUP BY is_bd").all()).results || [])
+    leadGeo[r.is_bd ? "bd" : "intl"] = r.c;
 
   const body = {
     ok: true,
@@ -341,6 +346,8 @@ async function apiStats(env, ctx) {
     counters,
     queue: q,
     rate_this_hour: recentRate.s,
+    bd_domains: bdRow.c,
+    lead_geo: leadGeo,
     categories: cats,
     daily: daily.reverse(),
     hourly: hourly.reverse(),

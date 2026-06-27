@@ -151,10 +151,12 @@
 
   <!-- SOURCES -->
   <div class="view" id="v-sources">
-    <div class="row r-2">
-      <div class="panel"><h2>domain harvest — per source<small id="srcHint"></small></h2><div class="scroll"><table id="sources"><thead><tr><th>source</th><th class="n">harvested</th><th>last run</th></tr></thead><tbody></tbody></table></div></div>
-      <div class="panel"><h2>queue depth (by status)</h2><div class="pad" id="queueBox2"></div></div>
+    <div class="grid cards" id="srcCards" style="margin-bottom:13px"></div>
+    <div class="panel" style="margin-bottom:13px">
+      <h2>domain কোন কোন way-তে সংগ্রহ হচ্ছে (live)<small id="srcHint"></small></h2>
+      <div class="scroll"><table id="sources"><thead><tr><th>পদ্ধতি</th><th>কী / কীভাবে কাজ করে</th><th>ধরন</th><th class="n">domain</th><th>শেষ run</th></tr></thead><tbody></tbody></table></div>
     </div>
+    <div class="panel"><h2>queue depth (by status)</h2><div class="pad" id="queueBox2"></div></div>
   </div>
 
   <!-- SYSTEM -->
@@ -189,6 +191,20 @@ const bn=n=>(n==null?"—":Number(n).toLocaleString('en-US')).replace(/[0-9]/g,d
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ago=ts=>{if(!ts)return"—";const s=Math.floor(Date.now()/1000)-ts;if(s<60)return bn(s)+" সেকেন্ড আগে";if(s<3600)return bn(Math.floor(s/60))+" মিনিট আগে";if(s<86400)return bn(Math.floor(s/3600))+" ঘণ্টা আগে";return bn(Math.floor(s/86400))+" দিন আগে";};
 const CAT={gambling:'জুয়া/ক্যাসিনো',pharma:'ওষুধ স্প্যাম',adult:'অ্যাডাল্ট',cloak:'cloaking',deface:'defacement',redirect:'redirect',foreign_lang:'বিদেশি ভাষা',malware:'malware'};
+// human description of every domain-collection method shown on the Harvest tab
+const SRC_INFO={
+  'existing-bulk':{d:'আপনার আগের bulk domain তালিকা (mixed)',k:'mixed'},
+  'global-ranked':{d:'DomCop top-1M global ranking — বিশ্বের জনপ্রিয় সাইট',k:'global'},
+  'global':{d:'paced top-global ranking feeder (D1 limit মেনে ধীরে ঢোকে)',k:'global'},
+  'crtsh':{d:'Certificate Transparency logs — যেকোনো নতুন .bd SSL সার্টিফিকেট (auto, 24/7 firehose)',k:'bd'},
+  'directories':{d:'BD business directory (bdtradeinfo ইত্যাদি)-র Website field',k:'bd'},
+  'reverse-ip':{d:'BD hosting ASN-এর IP রেঞ্জে host করা সব domain (সবচেয়ে বড় BD firehose)',k:'bd'},
+  'reverse_ip':{d:'BD hosting ASN-এর IP রেঞ্জে host করা domain',k:'bd'},
+  'osm':{d:'OpenStreetMap (Overpass) — BD ব্যবসার website ট্যাগ',k:'bd'},
+  'bd-bulk-157m':{d:'১৫৭M raw bulk → .bd/reverse-IP filter',k:'global'},
+  'bulk-bd-extract':{d:'১০.৪M bulk থেকে বের করা registrable .bd domain',k:'bd'},
+};
+const KIND={bd:{t:'বাংলাদেশ',c:'#10b981'},global:{t:'global',c:'#5b7088'},mixed:{t:'mixed',c:'#e7a700'}};
 let LEADS=[], curCat="", curRegion="bd", curBiz="", STATS={};
 
 // ---- tabs ----
@@ -236,8 +252,18 @@ function renderStats(s){
   const qhtml=ord.map(k=>{const v=q[k]||{batches:0,domains:0};return `<div style="display:flex;justify-content:space-between;padding:8px 2px;border-bottom:1px solid var(--line)"><span style="font-weight:600">${qb[k]}</span><span><b class="num">${bn(v.batches)}</b> batch · <b class="num">${bn(v.domains)}</b> domain</span></div>`;}).join('');
   document.getElementById('queueBox').innerHTML=qhtml;document.getElementById('queueBox2').innerHTML=qhtml;
   // sources
-  document.querySelector('#sources tbody').innerHTML=(s.sources||[]).length?s.sources.map(x=>`<tr><td style="font-weight:600">${esc(x.source)}</td><td class="n" style="color:var(--green);font-weight:700">${bn(x.total_harvested)}</td><td>${ago(x.last_run)}</td></tr>`).join(''):'<tr><td colspan="3" class="empty">harvester চালু হচ্ছে…</td></tr>';
-  document.getElementById('srcHint').textContent=bn((s.sources||[]).length)+" source";
+  const bdDom=s.bd_domains||0, totDom=c.total_domains||0, glob=Math.max(0,totDom-bdDom);
+  const srcCards=document.getElementById('srcCards');
+  if(srcCards)srcCards.innerHTML=
+    card('b-blue',IC.t,'মোট domain সংগ্রহ',bn(totDom),bn((s.sources||[]).length)+' way চালু')+
+    card('b-green',IC.c,'বাংলাদেশি (.bd)',bn(bdDom),'বিক্রয়যোগ্য মূল target')+
+    card('b-cyan',IC.s,'global / অন্যান্য',bn(glob),'lead কম মূল্যবান')+
+    card('b-gold',IC.f,'queue বাকি',bn(queued),(q.done?.batches?bn(q.done.batches)+' batch done':''));
+  document.querySelector('#sources tbody').innerHTML=(s.sources||[]).length?s.sources.map(x=>{
+    const info=SRC_INFO[x.source]||{d:'—',k:'mixed'},kk=KIND[info.k]||KIND.mixed;
+    return `<tr><td style="font-weight:700">${esc(x.source)}</td><td style="color:var(--muted);font-size:11.5px;max-width:360px;white-space:normal">${info.d}</td><td><span class="tag" style="background:${kk.c}1f;color:${kk.c}">${kk.t}</span></td><td class="n" style="color:var(--green);font-weight:700">${bn(x.total_harvested)}</td><td>${ago(x.last_run)}</td></tr>`;
+  }).join(''):'<tr><td colspan="5" class="empty">harvester চালু হচ্ছে…</td></tr>';
+  document.getElementById('srcHint').textContent=bn((s.sources||[]).length)+" way · "+bn(bdDom)+" .bd";
   // workers
   document.querySelector('#workers tbody').innerHTML=(s.workers||[]).length?s.workers.map(w=>`<tr><td class="mono">${esc(w.worker_id)}</td><td class="n">${bn(w.scanned_total)}</td><td class="n">${w.current_batch?bn(w.current_batch):'—'}</td><td><span class="tag ${w.state==='running'?'t-redirect':'t-foreign_lang'}">${esc(w.state)}</span></td><td>${ago(w.last_seen)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">scan wave-এর অপেক্ষা (প্রতি ৩০ মিনিটে)</td></tr>';
   document.getElementById('wHint').textContent=bn((s.workers||[]).length)+" live";
