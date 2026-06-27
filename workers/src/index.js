@@ -68,6 +68,7 @@ export default {
       if (request.method === "GET" && path === "/api/stats") return await apiStats(env, ctx);
       if (request.method === "GET" && path === "/api/leads") return await apiLeads(env, url);
       if (request.method === "GET" && path === "/api/feed") return await apiFeed(env, url);
+      if (request.method === "GET" && path === "/api/seed") return await apiSeed(env, url);
       if (request.method === "GET" && path === "/") return json({ ok: true, service: "bd-hack-audit-api", endpoints: ["/api/stats", "/api/leads", "/api/feed", "/health"] });
 
       // public write: dashboard "not a lead" toggle (low-stakes, reversible)
@@ -392,6 +393,21 @@ async function apiFeed(env, url) {
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "60", 10) || 60, 200);
   const rs = await env.DB.prepare("SELECT kind,domain,detail,ts FROM events ORDER BY id DESC LIMIT ?").bind(limit).all();
   return json({ ok: true, feed: rs.results || [] });
+}
+
+// Rotating slice of known .bd domains — seeds for the reverse-IP harvester
+// (resolve these to their shared hosting IPs, then reverse-IP to find co-hosted
+// BD businesses we don't have yet). Public read; domains are not secret.
+async function apiSeed(env, url) {
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10) || 200, 500);
+  const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+  const rs = await env.DB.prepare(
+    "SELECT domain FROM domains WHERE domain LIKE '%.bd' ORDER BY rowid LIMIT ? OFFSET ?"
+  ).bind(limit, offset).all();
+  const domains = (rs.results || []).map((r) => r.domain);
+  // wrap the offset when we run off the end so the harvester keeps cycling
+  const totalRow = await env.DB.prepare("SELECT COUNT(*) c FROM domains WHERE domain LIKE '%.bd'").first();
+  return json({ ok: true, domains, offset, limit, total: totalRow ? totalRow.c : 0 });
 }
 
 // ===========================================================================
