@@ -4,9 +4,9 @@ compatibility_date = "2026-01-01"
 workers_dev = true
 
 # Every minute: scan a small batch of unscanned domains (the Worker cron scan engine).
-# Every 15 min: housekeeping (trim events feed, requeue, refresh stats cache).
+# Every 15 min: housekeeping. Every 20 min: reverse-IP harvest (BD firehose). Every 3h: crt.sh .bd.
 [triggers]
-crons = ["* * * * *", "*/15 * * * *"]
+crons = ["* * * * *", "*/15 * * * *", "*/20 * * * *", "13 */3 * * *"]
 
 # The live dashboard is served as static assets by this same Worker.
 # Static files (index.html, config.js, fonts) are served first; any path

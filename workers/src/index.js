@@ -1,4 +1,5 @@
 import { scanTick, scanDomain } from "./scan.js";
+import { harvestReverseIp, harvestCrtsh, harvestDirectories } from "./harvest.js";
 
 /**
  * BD Hack-Audit — Cloudflare Worker API
@@ -91,6 +92,11 @@ export default {
           if (body.domain) return json({ ok: true, result: await scanDomain(env, { domain: body.domain }) });
           return json({ ok: true, ...(await scanTick(env, body.n)) });
         }
+        if (path === "/harvest_now") {
+          if (body.source === "crtsh") return json({ ok: true, ...(await harvestCrtsh(env)) });
+          if (body.source === "reverse") return json({ ok: true, ...(await harvestReverseIp(env)) });
+          return json({ ok: true, ...(await harvestDirectories(env)) });
+        }
         if (path === "/heartbeat") return await heartbeat(env, body);
         if (path === "/keyusage") return await keyusage(env, body);
       }
@@ -101,9 +107,11 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // "*/15 * * * *" -> housekeeping; everything else (the every-minute cron) -> scan a batch.
-    if (event.cron === "*/15 * * * *") ctx.waitUntil(housekeeping(env));
-    else ctx.waitUntil(scanTick(env).catch(() => {}));
+    const c = event.cron;
+    if (c === "*/15 * * * *") ctx.waitUntil(housekeeping(env));
+    else if (c === "*/20 * * * *") ctx.waitUntil((env.HACKERTARGET_KEY ? harvestReverseIp(env) : harvestDirectories(env)).catch(() => {})); // BD harvest (reverse-IP if key, else directories)
+    else if (c === "13 */3 * * *") ctx.waitUntil(harvestCrtsh(env).catch(() => {}));        // crt.sh .bd identities
+    else ctx.waitUntil(scanTick(env).catch(() => {}));                                       // every minute: scan
   },
 };
 

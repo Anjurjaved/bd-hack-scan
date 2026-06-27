@@ -84,11 +84,13 @@ async function fetchPage(url, ua, referer, ms = 11000) {
 const PRIOR = 0.12;
 const W = {
   L1KW_STRONG: [0.80, 0.030], L1KW_WEAK: [0.55, 0.120], L10LANG: [0.45, 0.080], L17HIDDEN: [0.85, 0.010],
-  L2UACLOAK: [0.92, 0.020], L9REDIR: [0.70, 0.060], L11REST: [0.88, 0.010], L20SCRIPT: [0.82, 0.020],
+  L2UACLOAK: [0.92, 0.020], L3REFCLOAK: [0.90, 0.020], L9REDIR: [0.70, 0.060], L4MOBILE: [0.75, 0.040],
+  L11REST: [0.88, 0.010], L20SCRIPT: [0.82, 0.020], L11SITEMAP: [0.78, 0.020], L20SHAPE: [0.80, 0.020],
+  L8IFRAME: [0.85, 0.010], L16HDR: [0.80, 0.030], L20RELAY: [0.50, 0.050],
   L14CAMPAIGN: [0.97, 0.002], L10DEFACE: [0.97, 0.002],
 };
 const HARD = new Set(["L14CAMPAIGN", "L10DEFACE"]);
-const LAYER_CAT = { L2UACLOAK: "cloak", L9REDIR: "redirect", L10DEFACE: "deface", L14CAMPAIGN: "malware", L10LANG: "foreign_lang", L20SCRIPT: "foreign_lang" };
+const LAYER_CAT = { L2UACLOAK: "cloak", L3REFCLOAK: "cloak", L9REDIR: "redirect", L4MOBILE: "redirect", L16HDR: "redirect", L20RELAY: "redirect", L10DEFACE: "deface", L14CAMPAIGN: "malware", L8IFRAME: "malware", L10LANG: "foreign_lang", L20SCRIPT: "foreign_lang" };
 
 function category(eff) {
   for (const s of eff) { const c = S.categoryOf(s.match); if (c) return c; }
@@ -129,9 +131,9 @@ function score(signals, ctx) {
     if (evidence.length >= 10) break;
   }
   // genuine-vs-hacked gate
-  const stealth = ["L2UACLOAK", "L17HIDDEN"].some((l) => layers.has(l));
-  const malwareDeface = ["L14CAMPAIGN", "L10DEFACE"].some((l) => layers.has(l));
-  const doorway = ["L11REST", "L20SCRIPT"].some((l) => layers.has(l));
+  const stealth = ["L2UACLOAK", "L3REFCLOAK", "L17HIDDEN", "L16HDR", "L20RELAY"].some((l) => layers.has(l));
+  const malwareDeface = ["L14CAMPAIGN", "L10DEFACE", "L8IFRAME"].some((l) => layers.has(l));
+  const doorway = ["L11REST", "L20SCRIPT", "L11SITEMAP", "L20SHAPE", "L4MOBILE"].some((l) => layers.has(l));
   const homepageOpen = layers.has("L1KW_STRONG");
   const hackFp = stealth || malwareDeface || (doorway && !homepageOpen);
   const spammy = !!(ctx && ctx.domainSpammy);
@@ -193,6 +195,28 @@ export async function scanDomain(env, rec) {
   const hid = /<(div|span|p|section|footer|ul|a)\b[^>]*style="[^"]*(display\s*:\s*none|visibility\s*:\s*hidden|text-indent\s*:\s*-\s*\d{3,}|position\s*:\s*absolute[^"]*(left|top)\s*:\s*-\s*\d{3,})[^"]*"[^>]*>([\s\S]{0,1500}?)<\/\1>/i.exec(B.text);
   if (hid && S.ALL_STRONG.test(stripHtml(hid[0]))) emit("homepage-content", "L17HIDDEN", "hidden:" + stripHtml(hid[0]).slice(0, 120), base + "/");
 
+  // L8 — gambling iframe/script injection (no extra fetch)
+  const ifr = (B.text + G.text).match(/<(?:iframe|script)[^>]+src="https?:\/\/[^"]*(?:casino|slot|judi|togel|xbet|melbet|bet[0-9]|gacor|sbobet)[^"]*"/i);
+  if (ifr) emit("malware-js", "L8IFRAME", ifr[0].slice(0, 140), base + "/");
+
+  // L16HDR — server header redirect to gambling / junk TLD (no extra fetch)
+  if (G.headers) {
+    const loc = G.headers.get("location") || G.headers.get("refresh") || "";
+    const lh = hostOf((loc.match(/https?:\/\/[^\s"']+/) || [""])[0]);
+    if (lh && !sameHost(lh, reg) && (S.RE.GAMB_STRONG.test(loc) || S.RE.JUNKTLD.test(loc))) emit("redirect", "L16HDR", loc.slice(0, 140), base + "/");
+  }
+
+  // L20RELAY — off-domain canonical/alternate to a non-CDN/non-platform host (from googlebot body)
+  const relaySkip = /cloudflare|cloudfront|akamai|fastly|jsdelivr|gstatic|googleusercontent|bunny|wp\.com|w\.org|gravatar|youtube|facebook|googleapis|lovable|webflow|wixsite|weebly|netlify|vercel|github\.io|blogspot|myshopify/i;
+  const relays = [];
+  const relayRx = /<link[^>]+rel="(?:alternate|canonical)"[^>]+href="https?:\/\/([^/"]+)/gi;
+  let rm, rg = 0;
+  while ((rm = relayRx.exec(G.text)) && rg++ < 10) {
+    const h = rm[1].toLowerCase();
+    if (h && !sameHost(h, reg) && !relaySkip.test(h)) relays.push(h);
+  }
+  if (relays.length) emit("redirect", "L20RELAY", [...new Set(relays)].slice(0, 2).join(";"), base + "/");
+
   let fired = sigs.length > 0;
 
   // L11REST — WordPress REST enumeration (the crown jewel for doorway/injected posts)
@@ -226,6 +250,36 @@ export async function scanDomain(env, rec) {
         emit("content-enum", "L20SCRIPT", `foreign=${foreign}/${total}`, base + "/wp-json/wp/v2/posts");
     }
   } catch (e) { /* not WP / blocked — fine */ }
+
+  // L11SITEMAP / L20SHAPE — sitemap doorway (gated: only when something already smells, to save fetches)
+  if (sigs.length > 0) {
+    try {
+      const rob = await fetchPage(base + "/robots.txt", UA_GB, null, 8000);
+      let smaps = [...(rob.text || "").matchAll(/sitemap:\s*(https?:\/\/\S+)/gi)].map((m) => m[1]);
+      if (!smaps.length) smaps = [base + "/sitemap_index.xml", base + "/wp-sitemap.xml", base + "/sitemap.xml"];
+      let sm = "";
+      for (const u of smaps.slice(0, 2)) {
+        if (!u.includes(reg)) continue;
+        const r = await fetchPage(u, UA_GB, null, 8000);
+        sm += r.text || "";
+        const children = [...new Set([...(r.text || "").matchAll(/https?:\/\/[^<\s"]+\.xml/gi)].map((m) => m[0]))].slice(0, 3);
+        for (const child of children) { if (child.includes(reg)) { const c = await fetchPage(child, UA_GB, null, 7000); sm += c.text || ""; } }
+        if (sm.length > 220000) break;
+      }
+      if (sm) {
+        const su = [...new Set([...sm.matchAll(/https?:\/\/[^<\s"]+/gi)].map((m) => m[0]))].filter((u) => u.includes(reg) && !u.toLowerCase().endsWith(".xml") && S.RE.SLUG_SPAM.test(u)).slice(0, 3);
+        if (su.length) emit("sitemap-doorway", "L11SITEMAP", su.join(";"), su[0]);
+        const locs = [...sm.matchAll(/<loc>\s*([^<\s]+)/gi)].map((m) => m[1]);
+        let gib = 0;
+        for (const u of locs) {
+          if (!u.includes(reg)) continue;
+          const seg = (u.replace(/\.html?$/, "").split("/").filter(Boolean).pop() || "").toLowerCase();
+          if (seg.length > 9) { const v = (seg.match(/[aeiou]/g) || []).length; if (v / seg.length < 0.22 && /[bcdfghjklmnpqrstvwxz]{6,}/.test(seg)) gib++; }
+        }
+        if (gib >= 10) emit("sitemap-doorway", "L20SHAPE", "gibberish=" + gib, base + "/");
+      }
+    } catch (e) { /* sitemap missing/blocked — fine */ }
+  }
 
   const sc = score(sigs, { domainSpammy: S.domainSpammy(reg), bdSignal: S.bdSignal(reg, visB) });
   sc.title = ttl;
