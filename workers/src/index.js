@@ -1,3 +1,5 @@
+import { scanTick, scanDomain } from "./scan.js";
+
 /**
  * BD Hack-Audit — Cloudflare Worker API
  * --------------------------------------------------------------------------
@@ -85,6 +87,10 @@ export default {
         if (path === "/cursor") return await cursorEndpoint(env, body);
         if (path === "/claim") return await claim(env, body);
         if (path === "/ingest") return await ingest(env, body);
+        if (path === "/scan_tick") {
+          if (body.domain) return json({ ok: true, result: await scanDomain(env, { domain: body.domain }) });
+          return json({ ok: true, ...(await scanTick(env, body.n)) });
+        }
         if (path === "/heartbeat") return await heartbeat(env, body);
         if (path === "/keyusage") return await keyusage(env, body);
       }
@@ -95,7 +101,9 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(housekeeping(env));
+    // "*/15 * * * *" -> housekeeping; everything else (the every-minute cron) -> scan a batch.
+    if (event.cron === "*/15 * * * *") ctx.waitUntil(housekeeping(env));
+    else ctx.waitUntil(scanTick(env).catch(() => {}));
   },
 };
 
@@ -337,6 +345,7 @@ async function apiStats(env, ctx) {
   const recentRate = (await env.DB.prepare("SELECT COALESCE(SUM(scanned),0) s FROM hourly_stats WHERE hour=?").bind(dhakaHour(now)).first()) || { s: 0 };
   // BD vs global split of the registry (the .bd subset is the monetizable core)
   const bdRow = (await env.DB.prepare("SELECT COUNT(*) c FROM domains WHERE domain LIKE '%.bd'").first()) || { c: 0 };
+  const unscRow = (await env.DB.prepare("SELECT COUNT(*) c FROM domains WHERE pass_no=0").first()) || { c: 0 };
   const leadGeo = { bd: 0, intl: 0 };
   for (const r of (await env.DB.prepare("SELECT is_bd, COUNT(*) c FROM findings WHERE confirmed=1 AND status!='rejected' GROUP BY is_bd").all()).results || [])
     leadGeo[r.is_bd ? "bd" : "intl"] = r.c;
@@ -348,6 +357,7 @@ async function apiStats(env, ctx) {
     queue: q,
     rate_this_hour: recentRate.s,
     bd_domains: bdRow.c,
+    unscanned: unscRow.c,
     lead_geo: leadGeo,
     categories: cats,
     daily: daily.reverse(),

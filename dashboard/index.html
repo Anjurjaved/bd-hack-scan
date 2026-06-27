@@ -232,7 +232,7 @@ async function tick(){
 }
 function renderStats(s){
   const c=s.counters||{},daily=s.daily||[],hourly=s.hourly||[],today=daily.length?daily[daily.length-1]:{},q=s.queue||{};
-  const queued=(q.ready?.domains||0)+(q.open?.domains||0)+(q.claimed?.domains||0);
+  const queued=(s.unscanned!=null)?s.unscanned:((q.ready?.domains||0)+(q.open?.domains||0)+(q.claimed?.domains||0));
   const conv=c.total_flagged?Math.round(100*c.total_confirmed/c.total_flagged):0;
   document.getElementById('cards').innerHTML=
     card('b-blue',IC.t,'মোট domain (queue)',bn(c.total_domains),'harvested '+bn(c.total_harvested))+

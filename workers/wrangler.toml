@@ -3,9 +3,10 @@ main = "src/index.js"
 compatibility_date = "2026-01-01"
 workers_dev = true
 
-# Aggregate rollups + cache refresh + housekeeping every 2 minutes
+# Every minute: scan a small batch of unscanned domains (the Worker cron scan engine).
+# Every 15 min: housekeeping (trim events feed, requeue, refresh stats cache).
 [triggers]
-crons = ["*/2 * * * *"]
+crons = ["* * * * *", "*/15 * * * *"]
 
 # The live dashboard is served as static assets by this same Worker.
 # Static files (index.html, config.js, fonts) are served first; any path
@@ -22,3 +23,5 @@ database_id = "5a01635e-b9fe-4b28-a684-ba7007118f2a"
 # It authorizes the scanner + harvester (write endpoints). Dashboard reads are public.
 [vars]
 BATCH_SIZE = "1000"
+SCAN_PER_TICK = "4"
+GROQ_MODEL = "llama-3.1-8b-instant"
