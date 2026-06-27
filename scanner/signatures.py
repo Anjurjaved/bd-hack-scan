@@ -28,8 +28,13 @@ RX_ADULT_WEAK = r'\bescort\b|\bxxx\b|sex video|sex tube|escort service'
 
 RX_DEFACE = r'hacked by|defaced by|h4cked|\bhak3d\b|pwned by|owned by .{0,20}team|greetz to|defacer\.id|gantengers|\bg4nteng\b|was here by|\bmr\.?[a-z0-9]+ team\b'
 
-RX_MALJS = (r'defacer\.id|cdn-fileserver\.com|l\.cdn-fileserver|jso\.[a-z0-9.]+\.id|if\(ndsw|[;{ ]ndsw[ =.:]|\bndsx\b|\bndsj\b|COOKIE_ANNOT|'
-    r'document\.currentScript\.remove|eval\(atob\(|eval\(unescape\(|eval\(String\.fromCharCode\(|eval\(decodeURIComponent\(')
+# L14CAMPAIGN is a HARD auto-confirm, so MALJS must contain ONLY near-zero-false-positive
+# malware infrastructure / campaign markers. Benign or dual-use patterns were REMOVED
+# (2026-06-27) because they HARD-confirmed clean sites: `document.currentScript.remove`
+# is a routine script-self-cleanup used by Lovable/analytics/many frameworks, and a bare
+# `eval(atob(` / `eval(unescape(` appears in legit minified code. Real multi-signal
+# obfuscation is still caught by detect.py's L14OBFUS (score>=4, NOT hard).
+RX_MALJS = r'defacer\.id|cdn-fileserver\.com|l\.cdn-fileserver|jso\.[a-z0-9.]+\.id|if\(ndsw|[;{ ]ndsw[ =.:]|\bndsx\b|\bndsj\b|COOKIE_ANNOT'
 
 RX_SHELL = r'base64_decode|gzinflate|str_rot13|FilesMan|c99shell|\bb374k\b|WSO [0-9]|preg_replace\(.*/e|\$_(POST|GET|REQUEST|COOKIE)\['
 
