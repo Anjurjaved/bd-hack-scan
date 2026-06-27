@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BD Hack-Audit — Live Command Center</title>
+<style>
+  /* Bengali numerals always in Sabbir Sorolota */
+  @font-face{ font-family:'Sabbir Sorolota'; src:url('assets/fonts/SabbirSorolota-num.woff2') format('woff2');
+    unicode-range:U+09E6-09EF,U+09F2-09F3,U+09F9; font-weight:400 900; font-display:swap; }
+  @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
+
+  :root{
+    --bg:#f4f7fb; --panel:#ffffff; --panel2:#fbfcfe; --ink:#0f2740; --muted:#5b7088; --line:#e6edf5;
+    --blue:#0066FF; --cyan:#00b8d4; --purple:#7B2FFF; --gold:#e7a700; --green:#10b981; --red:#e23d52; --orange:#f0883e;
+    --f:'Inter','Hind Siliguri',sans-serif; --fb:'Sabbir Sorolota','Hind Siliguri','Inter',sans-serif; --fm:'JetBrains Mono',monospace;
+    --sh:0 1px 2px rgba(16,39,64,.04),0 8px 24px rgba(16,39,64,.06);
+  }
+  *{box-sizing:border-box} :where(svg){width:1em;height:1em;flex:0 0 auto}
+  html,body{margin:0} body{background:var(--bg);color:var(--ink);font-family:var(--f);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .num,.bn-num{font-family:var(--fb)}
+  a{color:var(--blue);text-decoration:none}
+  .wrap{max-width:1480px;margin:0 auto;padding:18px clamp(12px,3vw,28px) 60px}
+
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 0 18px}
+  .logo{display:flex;align-items:center;gap:11px}
+  .logo .mark{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--blue),var(--purple));display:grid;place-items:center;color:#fff;box-shadow:var(--sh)}
+  .logo .mark svg{width:22px;height:22px}
+  .logo h1{font-size:18px;margin:0;font-weight:800;letter-spacing:-.2px}
+  .logo p{margin:0;font-size:11.5px;color:var(--muted);font-weight:500}
+  .live{margin-left:auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-size:12px;font-weight:600;box-shadow:var(--sh)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(16,185,129,.6);animation:pulse 1.8s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.55)}70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+  .dot.stale{background:var(--orange);animation:none}
+
+  .grid{display:grid;gap:14px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(176px,1fr));margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:15px 16px;box-shadow:var(--sh);position:relative;overflow:hidden}
+  .card .lab{font-size:11.5px;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:6px;text-transform:none}
+  .card .val{font-size:30px;font-weight:800;letter-spacing:-.5px;margin-top:6px;font-family:var(--fb)}
+  .card .sub{font-size:11.5px;color:var(--muted);margin-top:3px;font-family:var(--fb)}
+  .card .ic{position:absolute;right:12px;top:13px;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;opacity:.92}
+  .card .ic svg{width:16px;height:16px;color:#fff}
+  .b-blue .ic{background:linear-gradient(135deg,var(--blue),#3b8bff)} .b-cyan .ic{background:linear-gradient(135deg,var(--cyan),#26d8f2)}
+  .b-gold .ic{background:linear-gradient(135deg,var(--gold),#f6c343)} .b-red .ic{background:linear-gradient(135deg,var(--red),#ff6376)}
+  .b-green .ic{background:linear-gradient(135deg,var(--green),#34d39e)} .b-purple .ic{background:linear-gradient(135deg,var(--purple),#9d5cff)}
+  .b-red .val{color:var(--red)} .b-green .val{color:var(--green)}
+
+  .row{display:grid;gap:14px;margin-bottom:14px}
+  .r-2{grid-template-columns:1.55fr 1fr} .r-2b{grid-template-columns:1fr 1fr} .r-3{grid-template-columns:1fr 1fr 1fr}
+  @media(max-width:1080px){.r-2,.r-2b,.r-3{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);overflow:hidden}
+  .panel h2{font-size:13.5px;margin:0;padding:14px 16px;border-bottom:1px solid var(--line);font-weight:700;display:flex;align-items:center;gap:8px}
+  .panel h2 .ico{width:16px;height:16px;color:var(--blue)} .panel h2 small{margin-left:auto;font-weight:600;color:var(--muted);font-size:11px;font-family:var(--fb)}
+  .pad{padding:14px 16px}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;background:var(--panel2)}
+  td.n,th.n{text-align:right;font-family:var(--fb)} tbody tr:hover{background:var(--panel2)}
+  .scroll{max-height:420px;overflow:auto}
+  .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:.2px}
+  .t-gambling{background:#fdeaec;color:#c0263a} .t-pharma{background:#eaf2ff;color:#1f5bd6} .t-adult{background:#f5ebff;color:#7b2fff}
+  .t-cloak{background:#fff3e0;color:#c5781b} .t-deface{background:#ffe9e9;color:#d4313f} .t-redirect{background:#e9fbf3;color:#0f9d6a}
+  .t-foreign_lang{background:#eef0f4;color:#5b7088} .t-malware{background:#1b1f2a;color:#ff7a8a}
+  .mono{font-family:var(--fm);font-size:11.5px}
+  .proof{color:var(--muted);font-size:11.5px;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar{height:8px;border-radius:6px;background:var(--line);overflow:hidden} .bar>i{display:block;height:100%;border-radius:6px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);padding:0 16px 12px}
+  .legend b{font-family:var(--fb);color:var(--ink)}
+  .feed{max-height:420px;overflow:auto;padding:4px 0}
+  .feed .it{display:flex;gap:10px;align-items:flex-start;padding:9px 16px;border-bottom:1px solid var(--line)}
+  .feed .it .when{font-family:var(--fb);font-size:10.5px;color:var(--muted);min-width:54px}
+  .feed .it .dom{font-weight:600;font-size:12.5px}
+  .filters{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 12px}
+  .chip{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:5px 11px;font-size:11.5px;font-weight:600;cursor:pointer;color:var(--muted)}
+  .chip.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .empty{padding:30px;text-align:center;color:var(--muted);font-size:12.5px}
+  svg.chart{width:100%;height:200px;display:block}
+  .src-name{font-weight:600} .new{color:var(--green);font-weight:700} .dup{color:var(--muted)}
+  .kbar{display:flex;align-items:center;gap:8px}
+  footer{margin-top:26px;text-align:center;color:var(--muted);font-size:11.5px}
+  footer a{font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">
+      <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
+      <div><h1>BD Hack-Audit — Command Center</h1><p>Bangladesh business website security scan · live</p></div>
+    </div>
+    <div class="live">
+      <span class="pill"><span class="dot" id="liveDot"></span><span id="liveTxt">connecting…</span></span>
+      <span class="pill" id="updPill">updated —</span>
+    </div>
+  </header>
+
+  <!-- headline counters -->
+  <div class="grid cards" id="cards"></div>
+
+  <!-- charts -->
+  <div class="row r-2b">
+    <div class="panel">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg> দিন-প্রতি অগ্রগতি (cumulative)<small id="dHint"></small></h2>
+      <div class="pad"><svg class="chart" id="dailyChart" viewBox="0 0 800 200" preserveAspectRatio="none"></svg></div>
+      <div class="legend"><span><i style="color:var(--blue)">■</i> scanned</span> <span><i style="color:var(--gold)">■</i> flagged</span> <span><i style="color:var(--red)">■</i> confirmed</span></div>
+    </div>
+    <div class="panel">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg> ঘণ্টা-প্রতি scan rate (৪৮ ঘণ্টা)<small id="hHint"></small></h2>
+      <div class="pad"><svg class="chart" id="hourlyChart" viewBox="0 0 800 200" preserveAspectRatio="none"></svg></div>
+      <div class="legend"><span><i style="color:var(--cyan)">■</i> scanned/hr</span> <span><i style="color:var(--red)">■</i> confirmed/hr</span></div>
+    </div>
+  </div>
+
+  <!-- category + queue -->
+  <div class="row r-2">
+    <div class="panel">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg> confirmed hack — category breakdown<small id="catHint"></small></h2>
+      <div class="pad" id="catBars"></div>
+    </div>
+    <div class="panel">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3"/><path d="M3 8h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> queue health</h2>
+      <div class="pad" id="queueBox"></div>
+    </div>
+  </div>
+
+  <!-- confirmed leads -->
+  <div class="panel" style="margin-bottom:14px">
+    <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg> confirmed hacked businesses (leads)<small id="leadHint"></small></h2>
+    <div class="filters" id="catFilter"></div>
+    <div class="scroll"><table id="leads"><thead><tr><th>domain</th><th>business</th><th>category</th><th>verbatim proof</th><th>phone</th><th>when</th></tr></thead><tbody></tbody></table></div>
+  </div>
+
+  <!-- harvest sources + live feed -->
+  <div class="row r-2">
+    <div class="panel">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h18"/></svg> domain harvest — per source<small id="srcHint"></small></h2>
+      <div class="scroll"><table id="sources"><thead><tr><th>source</th><th class="n">harvested</th><th>last run</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="panel">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> live feed — confirmed hits</h2>
+      <div class="feed" id="feed"></div>
+    </div>
+  </div>
+
+  <!-- workers + keys -->
+  <div class="row r-2b">
+    <div class="panel">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg> scanner workers (live)<small id="wHint"></small></h2>
+      <div class="scroll"><table id="workers"><thead><tr><th>worker</th><th class="n">scanned</th><th>batch</th><th>state</th><th>seen</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="panel">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2 13 10"/><path d="m7 8 5 5"/><circle cx="6" cy="18" r="3"/></svg> Gemini key usage (Stage-2, আজ)<small id="kHint"></small></h2>
+      <div class="scroll"><table id="keys"><thead><tr><th>key</th><th class="n">requests</th><th class="n">ok</th><th class="n">429</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+
+  <footer>
+    BD Hack-Audit live system · 100% free cloud (GitHub Actions + Cloudflare) ·
+    তৈরি করেছে <a href="https://javeditsolution.com" target="_blank" rel="noopener noreferrer">Javed IT Solution</a>
+  </footer>
+</div>
+
+<script src="config.js"></script>
+<script>
+const API = (window.API_BASE||"").replace(/\/$/,"");
+const bn = n => (n==null?"—":Number(n).toLocaleString('en-US')).replace(/[0-9]/g,d=>"০১২৩৪৫৬৭৮৯"[d]);
+const el = (t,c,h)=>{const e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e;};
+const ago = ts => { if(!ts)return"—"; const s=Math.floor(Date.now()/1000)-ts;
+  if(s<60)return bn(s)+" সেকেন্ড আগে"; if(s<3600)return bn(Math.floor(s/60))+" মিনিট আগে";
+  if(s<86400)return bn(Math.floor(s/3600))+" ঘণ্টা আগে"; return bn(Math.floor(s/86400))+" দিন আগে"; };
+const CAT_BN = {gambling:'জুয়া/ক্যাসিনো',pharma:'ফার্মা',adult:'অ্যাডাল্ট',cloak:'cloaking',deface:'defacement',redirect:'redirect',foreign_lang:'বিদেশি ভাষা',malware:'malware'};
+
+const ICONS = {
+  total:'<path d="M3 7h18M3 12h18M3 17h18"/>',
+  scanned:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  rate:'<path d="M3 12h4l3 8 4-16 3 8h4"/>',
+  flagged:'<path d="M4 22V4l8-2 8 2v8l-8 2-8-2"/>',
+  confirmed:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+  queue:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/>',
+  harvest:'<path d="M12 3v18M5 10l7-7 7 7"/>'
+};
+function card(b,ic,lab,val,sub){
+  return `<div class="card ${b}"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ic}</svg></div>
+  <div class="lab">${lab}</div><div class="val">${val}</div><div class="sub">${sub||''}</div></div>`;
+}
+
+let curCat = "";
+function lineChart(svg, series, max, colors){
+  const W=800,H=200,P=6; svg.innerHTML="";
+  if(!series[0] || series[0].length<2){ svg.innerHTML='<text x="400" y="100" text-anchor="middle" fill="#5b7088" font-size="13" font-family="Inter">এখনো data নেই — scan শুরু হলে এখানে দেখা যাবে</text>'; return; }
+  const n=series[0].length, mx=Math.max(max,1);
+  const X=i=>P+i*(W-2*P)/(n-1), Y=v=>H-P-(v/mx)*(H-2*P);
+  series.forEach((s,si)=>{
+    let d="M"+s.map((v,i)=>X(i).toFixed(1)+","+Y(v).toFixed(1)).join(" L");
+    const area=d+` L${X(n-1).toFixed(1)},${H-P} L${X(0).toFixed(1)},${H-P} Z`;
+    svg.insertAdjacentHTML('beforeend',`<path d="${area}" fill="${colors[si]}" opacity="0.07"/><path d="${d}" fill="none" stroke="${colors[si]}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`);
+  });
+}
+function barChart(svg, vals, color){
+  const W=800,H=200,P=6,n=vals.length; svg.innerHTML="";
+  if(!n || Math.max(...vals)===0){ svg.innerHTML='<text x="400" y="100" text-anchor="middle" fill="#5b7088" font-size="13" font-family="Inter">এখনো data নেই</text>'; return; }
+  const mx=Math.max(...vals,1), bw=(W-2*P)/n;
+  vals.forEach((v,i)=>{ const h=(v/mx)*(H-2*P); svg.insertAdjacentHTML('beforeend',
+    `<rect x="${(P+i*bw+bw*0.12).toFixed(1)}" y="${(H-P-h).toFixed(1)}" width="${(bw*0.76).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${color}" opacity="${0.55+0.45*v/mx}"/>`); });
+}
+
+async function tick(){
+  try{
+    const s = await (await fetch(API+"/api/stats",{cache:'no-store'})).json();
+    render(s);
+    document.getElementById('liveDot').classList.remove('stale');
+    document.getElementById('liveTxt').textContent = "live";
+    document.getElementById('updPill').textContent = "updated " + new Date().toLocaleTimeString('en-GB');
+  }catch(e){
+    document.getElementById('liveDot').classList.add('stale');
+    document.getElementById('liveTxt').textContent = "reconnecting…";
+  }
+}
+
+function render(s){
+  const c = s.counters||{};
+  const daily = s.daily||[], hourly = s.hourly||[];
+  const today = daily.length? daily[daily.length-1] : {};
+  const q = s.queue||{};
+  const queued = (q.ready?.domains||0) + (q.open?.domains||0) + (q.claimed?.domains||0);
+  const convRate = c.total_flagged? Math.round(100*c.total_confirmed/c.total_flagged) : 0;
+
+  document.getElementById('cards').innerHTML =
+    card('b-blue',ICONS.total,'মোট domain (queue)',bn(c.total_domains),'harvested '+bn(c.total_harvested)) +
+    card('b-cyan',ICONS.scanned,'মোট scanned',bn(c.total_scanned),'আজ '+bn(today.scanned||0)) +
+    card('b-purple',ICONS.rate,'scan rate (এই ঘণ্টা)',bn(s.rate_this_hour),'per hour') +
+    card('b-gold',ICONS.flagged,'flagged (Stage-1)',bn(c.total_flagged),'আজ '+bn(today.flagged||0)) +
+    card('b-red',ICONS.confirmed,'confirmed HACKED',bn(c.total_confirmed),convRate+'% conversion'.replace(/[0-9]+/,bn(convRate))) +
+    card('b-green',ICONS.queue,'queue বাকি',bn(queued),(q.done?.batches?bn(q.done.batches)+' batch done':'')) ;
+
+  // daily cumulative
+  let cs=0,cf=0,cc=0; const ds=[],df=[],dc=[];
+  daily.forEach(d=>{cs+=d.scanned||0;cf+=d.flagged||0;cc+=d.confirmed||0;ds.push(cs);df.push(cf);dc.push(cc);});
+  lineChart(document.getElementById('dailyChart'),[ds,df,dc],Math.max(cs,1),['var(--blue)','var(--gold)','var(--red)']);
+  document.getElementById('dHint').textContent = bn(daily.length)+" দিন";
+
+  // hourly bars (scanned)
+  barChart(document.getElementById('hourlyChart'), hourly.map(h=>h.scanned||0), 'var(--cyan)');
+  document.getElementById('hHint').textContent = bn(hourly.length)+" ঘণ্টা";
+
+  // category breakdown
+  const cats = s.categories||[]; const cmax = Math.max(1,...cats.map(x=>x.c));
+  const colors={gambling:'var(--red)',pharma:'var(--blue)',adult:'var(--purple)',cloak:'var(--orange)',deface:'#d4313f',redirect:'var(--green)',foreign_lang:'var(--muted)',malware:'#ff7a8a'};
+  document.getElementById('catBars').innerHTML = cats.length? cats.map(x=>`
+    <div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px">
+      <span><span class="tag t-${x.category}">${CAT_BN[x.category]||x.category||'?'}</span></span><b class="num">${bn(x.c)}</b></div>
+      <div class="bar"><i style="width:${Math.max(4,100*x.c/cmax)}%;background:${colors[x.category]||'var(--blue)'}"></i></div></div>`).join('')
+    : '<div class="empty">এখনো কোনো confirmed hack নেই</div>';
+  document.getElementById('catHint').textContent = bn(cats.reduce((a,b)=>a+b.c,0))+" confirmed";
+
+  // queue health
+  const order=['open','ready','claimed','done'], qbn={open:'ভরছে (open)',ready:'প্রস্তুত (ready)',claimed:'scanning (claimed)',done:'শেষ (done)'};
+  document.getElementById('queueBox').innerHTML = order.map(k=>{
+    const v=q[k]||{batches:0,domains:0};
+    return `<div style="display:flex;justify-content:space-between;padding:9px 2px;border-bottom:1px solid var(--line)">
+      <span style="font-weight:600">${qbn[k]}</span>
+      <span><b class="num">${bn(v.batches)}</b> <span style="color:var(--muted)">batch</span> · <b class="num">${bn(v.domains)}</b> <span style="color:var(--muted)">domain</span></span></div>`;
+  }).join('');
+
+  // sources
+  document.querySelector('#sources tbody').innerHTML = (s.sources||[]).length? s.sources.map(x=>
+    `<tr><td class="src-name">${x.source}</td><td class="n new">${bn(x.total_harvested)}</td><td>${ago(x.last_run)}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="empty">harvester এখনো চালু হয়নি</td></tr>';
+  document.getElementById('srcHint').textContent = bn((s.sources||[]).length)+" source";
+
+  // workers
+  document.querySelector('#workers tbody').innerHTML = (s.workers||[]).length? s.workers.map(w=>
+    `<tr><td class="mono">${w.worker_id}</td><td class="n">${bn(w.scanned_total)}</td><td class="n">${w.current_batch?bn(w.current_batch):'—'}</td><td><span class="tag ${w.state==='running'?'t-redirect':'t-foreign_lang'}">${w.state}</span></td><td>${ago(w.last_seen)}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="empty">কোনো active worker নেই (scan wave-এর অপেক্ষা)</td></tr>';
+  document.getElementById('wHint').textContent = bn((s.workers||[]).length)+" live";
+
+  // keys
+  document.querySelector('#keys tbody').innerHTML = (s.keys||[]).length? s.keys.map(k=>
+    `<tr><td class="mono">${k.key_id}</td><td class="n">${bn(k.requests)}</td><td class="n" style="color:var(--green)">${bn(k.successes)}</td><td class="n" style="color:${k.rate_limited?'var(--red)':'var(--muted)'}">${bn(k.rate_limited)}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="empty">Stage-2 এখনো চলেনি</td></tr>';
+  document.getElementById('kHint').textContent = bn((s.keys||[]).reduce((a,b)=>a+b.requests,0))+" call আজ";
+
+  // category filter chips
+  const cf2 = document.getElementById('catFilter');
+  if(!cf2.dataset.built){
+    const all=['','gambling','pharma','adult','cloak','deface','redirect','foreign_lang','malware'];
+    cf2.innerHTML = all.map(c=>`<span class="chip ${c===curCat?'on':''}" data-c="${c}">${c?(CAT_BN[c]||c):'সব'}</span>`).join('');
+    cf2.dataset.built="1";
+    cf2.onclick = e=>{const t=e.target.closest('.chip'); if(!t)return; curCat=t.dataset.c;
+      cf2.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x.dataset.c===curCat)); loadLeads();};
+  }
+}
+
+async function loadLeads(){
+  try{
+    const u = API+"/api/leads?limit=300"+(curCat?("&category="+curCat):"");
+    const r = await (await fetch(u,{cache:'no-store'})).json();
+    const rows = r.leads||[];
+    document.querySelector('#leads tbody').innerHTML = rows.length? rows.map(l=>`
+      <tr>
+        <td><a href="https://${l.domain}" target="_blank" rel="noopener" class="mono">${l.domain}</a></td>
+        <td>${l.business||'—'}</td>
+        <td><span class="tag t-${l.category}">${CAT_BN[l.category]||l.category||'?'}</span></td>
+        <td class="proof" title="${(l.proof_snippet||'').replace(/"/g,'&quot;')}">${l.proof_snippet||'—'}</td>
+        <td class="mono">${l.phone||'—'}</td>
+        <td>${ago(l.ts)}</td>
+      </tr>`).join('') : '<tr><td colspan="6" class="empty">এখনো confirmed lead নেই</td></tr>';
+    document.getElementById('leadHint').textContent = bn(rows.length)+" lead";
+  }catch(e){}
+}
+
+async function loadFeed(){
+  try{
+    const r = await (await fetch(API+"/api/feed?limit=50",{cache:'no-store'})).json();
+    const f = r.feed||[];
+    document.getElementById('feed').innerHTML = f.length? f.map(x=>`
+      <div class="it"><span class="when">${ago(x.ts)}</span>
+        <div><div class="dom">${x.domain||''}</div><div style="color:var(--muted);font-size:11.5px">${x.detail||''}</div></div></div>`).join('')
+      : '<div class="empty">confirmed hit এলে এখানে লাইভ দেখা যাবে</div>';
+  }catch(e){}
+}
+
+function loop(){ tick(); loadLeads(); loadFeed(); }
+loop();
+setInterval(tick, 15000);
+setInterval(loadFeed, 15000);
+setInterval(loadLeads, 30000);
+</script>
+</body>
+</html>

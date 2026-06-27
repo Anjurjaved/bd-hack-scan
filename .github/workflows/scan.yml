@@ -1,0 +1,43 @@
+name: scan
+
+# Heartbeat: every 30 min a fresh wave of 16 parallel scanner jobs spins up,
+# each claims batches from the Worker and scans for ~25 min, then exits cleanly.
+# The schedule IS the keep-alive (no PAT needed); cron drift just delays a wave.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+# Only one scan wave at a time (free tier = 20 concurrent jobs total).
+concurrency:
+  group: scanner
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        worker: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install -q -r scanner/requirements.txt
+      - name: Scan
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          SHARED_TOKEN: ${{ secrets.SHARED_TOKEN }}
+          WORKER_ID: "w${{ matrix.worker }}"
+          JOB_MINUTES: "25"
+          SCAN_CONC: "120"
+          VERIFY_PROVIDER: "none"
+        run: python scanner/scan.py
