@@ -458,6 +458,11 @@ async function scanFanout(env) {
     agg.errors += r.errors || 0;
   }
   if (agg.rowids.length) await ingestResults(env, agg);
+  // one lightweight engine heartbeat per tick so the dashboard shows the live shard fleet
+  const live = results.filter(Boolean).length;
+  await env.DB.prepare(
+    "INSERT INTO workers_heartbeat (worker_id,last_seen,scanned_total,current_batch,state) VALUES ('cf-engine',?,?,?,'running') ON CONFLICT(worker_id) DO UPDATE SET last_seen=excluded.last_seen, scanned_total=workers_heartbeat.scanned_total+excluded.scanned_total, current_batch=excluded.current_batch, state='running'"
+  ).bind(Math.floor(Date.now() / 1000), agg.scanned, live).run();
 }
 
 async function housekeeping(env) {

@@ -162,7 +162,7 @@
   <!-- SYSTEM -->
   <div class="view" id="v-system">
     <div class="row r-2b">
-      <div class="panel"><h2>scanner workers (live)<small id="wHint"></small></h2><div class="scroll"><table id="workers"><thead><tr><th>worker</th><th class="n">scanned</th><th>batch</th><th>state</th><th>seen</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel"><h2>scan engine — Cloudflare parallel shards (always-on)<small id="wHint"></small></h2><div class="scroll"><table id="workers"><thead><tr><th>engine</th><th class="n">scanned</th><th class="n">shards</th><th>state</th><th>seen</th></tr></thead><tbody></tbody></table></div></div>
       <div class="panel"><h2>scan health</h2><div class="pad" id="healthBox"></div></div>
     </div>
   </div>
@@ -170,7 +170,7 @@
   <!-- FEED -->
   <div class="view" id="v-feed"><div class="panel"><h2>live feed — scan + harvest activity (কোন source কত domain আনল, কী hacked পাওয়া গেল)</h2><div class="feed" id="feed"></div></div></div>
 
-  <footer>BD Hack-Audit · 100% free (GitHub Actions + Cloudflare) · তৈরি করেছে <a href="https://javeditsolution.com" target="_blank" rel="noopener noreferrer">Javed IT Solution</a></footer>
+  <footer>BD Hack-Audit · 100% free (Cloudflare Workers cron · ৮ parallel shard) · তৈরি করেছে <a href="https://javeditsolution.com" target="_blank" rel="noopener noreferrer">Javed IT Solution</a></footer>
 </div>
 
 <!-- LEAD DETAIL MODAL -->
@@ -265,7 +265,7 @@ function renderStats(s){
   }).join(''):'<tr><td colspan="5" class="empty">harvester চালু হচ্ছে…</td></tr>';
   document.getElementById('srcHint').textContent=bn((s.sources||[]).length)+" way · "+bn(bdDom)+" .bd";
   // workers
-  document.querySelector('#workers tbody').innerHTML=(s.workers||[]).length?s.workers.map(w=>`<tr><td class="mono">${esc(w.worker_id)}</td><td class="n">${bn(w.scanned_total)}</td><td class="n">${w.current_batch?bn(w.current_batch):'—'}</td><td><span class="tag ${w.state==='running'?'t-redirect':'t-foreign_lang'}">${esc(w.state)}</span></td><td>${ago(w.last_seen)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">scan wave-এর অপেক্ষা (প্রতি ৩০ মিনিটে)</td></tr>';
+  document.querySelector('#workers tbody').innerHTML=(s.workers||[]).length?s.workers.map(w=>`<tr><td class="mono">${esc(w.worker_id)}</td><td class="n">${bn(w.scanned_total)}</td><td class="n">${w.current_batch?bn(w.current_batch):'—'}</td><td><span class="tag ${w.state==='running'?'t-redirect':'t-foreign_lang'}">${esc(w.state)}</span></td><td>${ago(w.last_seen)}</td></tr>`).join(''):'<tr><td colspan="5" class="empty">scan engine চালু হচ্ছে…</td></tr>';
   document.getElementById('wHint').textContent=bn((s.workers||[]).length)+" live";
   // health
   const rate=s.rate_this_hour||0,backlog=queued,eta=rate>0?Math.round(backlog/rate):0;
