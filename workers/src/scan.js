@@ -323,27 +323,67 @@ async function groqVerify(env, domain, title, excerpt, evidence) {
   return null;
 }
 
-// ---- ingest one tick's findings + stats (per-domain; free-tier light) ----
 const DHAKA = 6 * 3600;
 const dDay = (ts) => new Date((ts + DHAKA) * 1000).toISOString().slice(0, 10);
 const dHour = (ts) => new Date((ts + DHAKA) * 1000).toISOString().slice(0, 13).replace("T", "-");
 const CATS = ["gambling", "pharma", "adult", "deface", "cloak", "foreign_lang", "malware", "redirect"];
 
-async function ingest(env, findings, scanned, errors) {
+// scanSlice — read this shard's slice of the queue and SCAN it. Returns results WITHOUT
+// touching D1 (besides the read). The sibling shard Workers run this and return the JSON to
+// the main Worker, which is the SINGLE writer (ingestResults) — so 8 parallel shards never
+// collide on D1 writes (that collision was silently losing ~75% of scans). Pure read+compute.
+export async function scanSlice(env, n) {
+  const N = n || Number(env.SCAN_PER_TICK || 5);
+  const SHARDS = Math.max(1, Number(env.SCAN_SHARDS || 1));
+  const SHARD = Math.max(0, Number(env.SCAN_SHARD || 0)) % SHARDS;
+  const rs = await env.DB.prepare(
+    "SELECT rowid,domain,business,phone FROM domains WHERE pass_no=0 AND (rowid % ?)=? ORDER BY bd_score DESC, rowid LIMIT ?"
+  ).bind(SHARDS, SHARD, N).all();
+  const rows = rs.results || [];
+  const findings = [], rowids = [];
+  let errors = 0;
+  for (const r of rows) {
+    rowids.push(r.rowid);   // every claimed row gets marked done by ingestResults (no re-scan)
+    let sc;
+    try { sc = await scanDomain(env, r); } catch (e) { errors++; continue; }
+    if (sc.error) { errors++; continue; }
+    if (!sc.flagged) continue;
+    let status = sc.status, confirmed = sc.confirmed, verdict = sc.verdict, reason = `posterior=${sc.posterior} buckets=${sc.nbuckets}${sc.hard ? " HARD" : ""}`, biz = sc.bizType;
+    if (["gambling", "adult", "foreign_lang"].includes(sc.category)) {
+      const v = await groqVerify(env, r.domain, sc.title, sc.excerpt, sc.evidence.map((e) => e.url + " " + e.match).join("; "));
+      if (v) {
+        if (v.classification === "hacked_client") { status = "lead"; confirmed = 1; }
+        else continue;
+        biz = v.business_type || biz; verdict = "groq-" + v.classification; reason = "groq:" + v.classification + " — " + v.reason;
+      } else if (sc.status === "spam_site") continue;
+    } else if (sc.status === "spam_site") continue;
+    findings.push({ domain: r.domain, business: r.business, phone: r.phone, category: sc.category, layers: sc.layers.join(","), proof: sc.proof, proofUrl: sc.proofUrl, httpStatus: sc.httpStatus, nbuckets: sc.nbuckets, verdict, reason, confirmed, evidence: sc.evidence, isBd: sc.isBd, bizType: biz, status });
+  }
+  return { rowids, findings, scanned: rows.length, errors };
+}
+
+// ingestResults — the SINGLE writer. Marks all scanned rowids done + writes findings + stats
+// in ONE batch. If it fails, the rowids stay pass_no=0 and simply retry next tick (no loss).
+export async function ingestResults(env, agg) {
   const now = Math.floor(Date.now() / 1000);
+  const rowids = agg.rowids || [], findings = agg.findings || [];
+  const scanned = agg.scanned || 0, errors = agg.errors || 0;
   const stmts = [];
+  for (let i = 0; i < rowids.length; i += 90) {
+    const chunk = rowids.slice(i, i + 90);
+    stmts.push(env.DB.prepare(`UPDATE domains SET pass_no=1 WHERE rowid IN (${chunk.map(() => "?").join(",")})`).bind(...chunk));
+  }
   const catc = Object.fromEntries(CATS.map((c) => [c, 0]));
   let flagged = 0, confirmed = 0;
   for (const f of findings) {
     flagged++;
     const conf = f.confirmed ? 1 : 0;
     if (conf) { confirmed++; if (catc[f.category] !== undefined) catc[f.category]++; }
-    // keep one finding row per domain (always-latest)
     stmts.push(env.DB.prepare("DELETE FROM findings WHERE domain=?").bind(f.domain));
     stmts.push(env.DB.prepare(
       "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage1_score,stage2_verdict,stage2_reason,stage2_category,confirmed,pass_no,first_ts,ts,evidence,is_bd,biz_type,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).bind(f.domain, (f.business || "").slice(0, 200), (f.phone || "").slice(0, 40), f.category, f.layers.slice(0, 200), f.proof.slice(0, 600), f.proofUrl.slice(0, 300), f.httpStatus || 0, f.nbuckets || 0, (f.verdict || "").slice(0, 20), (f.reason || "").slice(0, 400), f.category, conf, 1, now, now, JSON.stringify(f.evidence).slice(0, 4000), f.isBd ? 1 : 0, (f.bizType || "").slice(0, 30), (f.status || "lead").slice(0, 16)));
-    if (conf) stmts.push(env.DB.prepare("INSERT INTO events (kind,domain,detail,ts) VALUES ('confirmed',?,?,?)").bind(f.domain, (f.category + " | " + f.proof).slice(0, 200), now));
+    ).bind(f.domain, (f.business || "").slice(0, 200), (f.phone || "").slice(0, 40), f.category, (f.layers || "").slice(0, 200), (f.proof || "").slice(0, 600), (f.proofUrl || "").slice(0, 300), f.httpStatus || 0, f.nbuckets || 0, (f.verdict || "").slice(0, 20), (f.reason || "").slice(0, 400), f.category, conf, 1, now, now, JSON.stringify(f.evidence || []).slice(0, 4000), f.isBd ? 1 : 0, (f.bizType || "").slice(0, 30), (f.status || "lead").slice(0, 16)));
+    if (conf) stmts.push(env.DB.prepare("INSERT INTO events (kind,domain,detail,ts) VALUES ('confirmed',?,?,?)").bind(f.domain, (f.category + " | " + (f.proof || "")).slice(0, 200), now));
   }
   const day = dDay(now), hour = dHour(now);
   const catSet = CATS.map((c) => `${c}=${c}+${catc[c]}`).join(",");
@@ -355,47 +395,11 @@ async function ingest(env, findings, scanned, errors) {
   stmts.push(env.DB.prepare("UPDATE counters SET value=value+? WHERE metric='total_flagged'").bind(flagged));
   stmts.push(env.DB.prepare("UPDATE counters SET value=value+? WHERE metric='total_confirmed'").bind(confirmed));
   stmts.push(env.DB.prepare("UPDATE counters SET value=value+? WHERE metric='total_errors'").bind(errors));
-  await env.DB.batch(stmts);
+  if (stmts.length) await env.DB.batch(stmts);
+  return { scanned, flagged, confirmed };
 }
 
-// ---- one cron tick: claim N unscanned domains, scan, ingest ----
+// single-worker convenience (used by POST /scan_tick and main shard-0 fallback)
 export async function scanTick(env, n) {
-  const N = n || Number(env.SCAN_PER_TICK || 5);
-  // Multi-Worker sharding: each scanner Worker owns rowid % SHARDS == SHARD, so N Workers
-  // partition the queue with NO overlap. Single Worker => SHARDS=1 (everything).
-  const SHARDS = Math.max(1, Number(env.SCAN_SHARDS || 1));
-  const SHARD = Math.max(0, Number(env.SCAN_SHARD || 0)) % SHARDS;
-  // BD-relevant (.bd / BD-hosted, higher bd_score) first so cron ticks aren't wasted on global junk
-  const rs = await env.DB.prepare(
-    "SELECT rowid,domain,business,phone FROM domains WHERE pass_no=0 AND (rowid % ?)=? ORDER BY bd_score DESC, rowid LIMIT ?"
-  ).bind(SHARDS, SHARD, N).all();
-  const rows = rs.results || [];
-  if (!rows.length) return { scanned: 0, flagged: 0 };
-  // claim (mark scanned) up front so overlapping ticks don't double-scan
-  await env.DB.prepare(`UPDATE domains SET pass_no=1 WHERE rowid IN (${rows.map(() => "?").join(",")})`).bind(...rows.map((r) => r.rowid)).run();
-
-  const findings = [];
-  let errors = 0;
-  for (const r of rows) {
-    let sc;
-    try { sc = await scanDomain(env, r); } catch (e) { errors++; continue; }
-    if (sc.error) { errors++; continue; }
-    if (!sc.flagged) continue;
-    let status = sc.status, confirmed = sc.confirmed, verdict = sc.verdict, reason = `posterior=${sc.posterior} buckets=${sc.nbuckets}${sc.hard ? " HARD" : ""}`, biz = sc.bizType;
-    // Groq Stage-2 for gambling/adult/foreign (drop genuine spam, confirm hacked)
-    if (["gambling", "adult", "foreign_lang"].includes(sc.category)) {
-      const v = await groqVerify(env, r.domain, sc.title, sc.excerpt, sc.evidence.map((e) => e.url + " " + e.match).join("; "));
-      if (v) {
-        if (v.classification === "hacked_client") { status = "lead"; confirmed = 1; }
-        else continue; // genuine_spam / false_positive -> drop
-        biz = v.business_type || biz;
-        verdict = "groq-" + v.classification;
-        reason = "groq:" + v.classification + " — " + v.reason;
-      } else if (sc.status === "spam_site") continue;
-    } else if (sc.status === "spam_site") continue;
-
-    findings.push({ domain: r.domain, business: r.business, phone: r.phone, category: sc.category, layers: sc.layers.join(","), proof: sc.proof, proofUrl: sc.proofUrl, httpStatus: sc.httpStatus, nbuckets: sc.nbuckets, verdict, reason, confirmed, evidence: sc.evidence, isBd: sc.isBd, bizType: biz, status });
-  }
-  await ingest(env, findings, rows.length, errors);
-  return { scanned: rows.length, flagged: findings.length, confirmed: findings.filter((f) => f.confirmed).length };
+  return await ingestResults(env, await scanSlice(env, n));
 }

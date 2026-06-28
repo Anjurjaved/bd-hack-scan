@@ -1,4 +1,4 @@
-import { scanTick, scanDomain } from "./scan.js";
+import { scanTick, scanDomain, scanSlice, ingestResults } from "./scan.js";
 import { harvestReverseIp, harvestCrtsh, harvestDirectories, harvestCommonCrawl } from "./harvest.js";
 
 /**
@@ -439,14 +439,25 @@ async function apiSeed(env, url) {
 async function scanFanout(env) {
   const shards = Math.max(1, Number(env.SCAN_SHARDS || 1));
   const sub = env.SCAN_SUBDOMAIN || "javed-it";
-  const tasks = [scanTick(env)];
   const hdr = { headers: { authorization: "Bearer " + (env.SHARED_TOKEN || "") } };
+  // every shard SCANS in its own invocation (own CPU/subrequests); results come back here.
+  const tasks = [scanSlice(env)];   // main = shard 0
   for (let i = 1; i < shards; i++) {
     const svc = env["SHARD" + i];
-    if (svc) tasks.push(svc.fetch("https://shard/run", hdr).catch(() => {}));          // service binding (preferred)
-    else tasks.push(fetch(`https://bd-scan-${i}.${sub}.workers.dev/run`, hdr).catch(() => {})); // HTTP fallback
+    const p = svc ? svc.fetch("https://shard/run", hdr) : fetch(`https://bd-scan-${i}.${sub}.workers.dev/run`, hdr);
+    tasks.push(p.then((r) => r.json()).catch(() => null));
   }
-  await Promise.all(tasks);
+  const results = await Promise.all(tasks);
+  // aggregate, then write ONCE (single writer = zero D1 write-contention across shards)
+  const agg = { rowids: [], findings: [], scanned: 0, errors: 0 };
+  for (const r of results) {
+    if (!r) continue;
+    if (Array.isArray(r.rowids)) agg.rowids.push(...r.rowids);
+    if (Array.isArray(r.findings)) agg.findings.push(...r.findings);
+    agg.scanned += r.scanned || 0;
+    agg.errors += r.errors || 0;
+  }
+  if (agg.rowids.length) await ingestResults(env, agg);
 }
 
 async function housekeeping(env) {
