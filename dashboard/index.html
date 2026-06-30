@@ -292,6 +292,9 @@
         <span class="chip on" data-sr="bd" onclick="setShotRegion(this)">বাংলাদেশি</span>
         <span class="chip" data-sr="intl" onclick="setShotRegion(this)">International</span>
         <span class="chip" data-sr="all" onclick="setShotRegion(this)">সব</span>
+        <span class="lab" style="margin-left:auto;font-size:11.5px;color:var(--muted);font-weight:700">view:</span>
+        <span class="chip on" data-sv="grid" onclick="setShotView(this)">grid</span>
+        <span class="chip" data-sv="ip" onclick="setShotView(this)">server cluster</span>
       </div>
       <div class="shotbar" id="shotCatBar">
         <span class="lab" style="font-size:11.5px;color:var(--muted);font-weight:700">ধরন:</span>
@@ -424,8 +427,9 @@ function renderBizChips(){const el=document.getElementById('bizFilter');const ty
 function updateBadges(){document.getElementById('leadBadge').textContent=bn(LEADS.filter(l=>l.is_bd).length);document.getElementById('intlBadge').textContent=bn(LEADS.filter(l=>!l.is_bd).length);const sb=document.getElementById('shotBadge');if(sb)sb.textContent=bn(LEADS.length);}
 async function rejectLead(id){if(!confirm('এই lead সরিয়ে দেবেন? (এটা lead নয় হিসেবে চিহ্নিত হবে)'))return;try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:id,status:'rejected'})});}catch(e){}LEADS=LEADS.filter(l=>l.id!==id);closeModal();updateBadges();renderLeads();}
 async function loadLeads(){
-  try{const r=await(await fetch(API+"/api/leads?limit=1000",{cache:'no-store'})).json();LEADS=r.leads||[];
-    updateBadges();renderLeads();}catch(e){}
+  try{const r=await(await fetch(API+"/api/leads?limit=3000",{cache:'no-store'})).json();LEADS=r.leads||[];
+    updateBadges();renderLeads();
+    if(document.getElementById('v-shots').classList.contains('on'))renderShots();}catch(e){}
 }
 function renderLeads(){
   const q=(document.getElementById('leadSearch').value||"").toLowerCase();
@@ -631,17 +635,48 @@ async function loadManualStore(){
 async function delManual(id){try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:id,status:'rejected'})});}catch(e){}loadManualStore();}
 async function delManualBatch(name){if(!confirm('পুরো "'+name+'" batch মুছবেন?'))return;const ids=MANUAL.filter(l=>(l.mbatch||'(নামহীন batch)')===name).map(l=>l.id);for(const id of ids){try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:id,status:'rejected'})});}catch(e){}}loadManualStore();}
 
-// ---- screenshots gallery (free thum.io hotlink — no storage, no token) ----
-let curShotRegion='bd', curShotCat='', SHOTROWS=[];
+// ---- screenshots gallery (free thum.io hotlink — no storage, no Gemini token; covers ALL leads, auto for new) ----
+let curShotRegion='bd', curShotCat='', curShotView='grid', SHOTROWS=[], SHOT_REGION_ROWS=[], shotObs=null;
 function shotUrl(l,w){let u=(l&&(l.proof_url||('https://'+l.domain)))||'';if(!/^https?:\/\//.test(u))u='https://'+u;return 'https://image.thum.io/get/width/'+(w||500)+'/crop/640/'+u;}
-function shotErr(img){img.onerror=null;img.style.display='none';const ld=img.parentElement.querySelector('.ld');if(ld){ld.style.display='';ld.textContent='preview নেই';}}
-function setShotRegion(el){curShotRegion=el.dataset.sr;el.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===el));renderShots();}
-function setShotCat(el){curShotCat=el.dataset.sc;el.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===el));renderShots();}
+function shotErr(img){if(!img.dataset.fb){img.dataset.fb='1';img.src='https://s0.wp.com/mshots/v1/'+encodeURIComponent(img.dataset.u||'')+'?w=500';return;}img.onerror=null;img.style.display='none';const ld=img.parentElement.querySelector('.ld');if(ld){ld.style.display='';ld.textContent='preview নেই';}}
+function setShotRegion(el){curShotRegion=el.dataset.sr;el.parentElement.querySelectorAll('.chip[data-sr]').forEach(x=>x.classList.toggle('on',x===el));curShotCat='';renderShots();}
+function setShotCat(el){curShotCat=el.dataset.sc;el.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===el));renderShotsGrid();}
+function setShotView(el){curShotView=el.dataset.sv;el.parentElement.querySelectorAll('.chip[data-sv]').forEach(x=>x.classList.toggle('on',x===el));renderShotsGrid();}
+function shotCard(l,i){const u=(l.proof_url||('https://'+l.domain));return `<div class="shotcard" onclick="openLeadObj(SHOTROWS[${i}])"><div class="shotimg"><div class="ld">screenshot…</div><img data-src="${shotUrl(l,500)}" data-u="${esc(u)}" onload="this.previousElementSibling.style.display='none'" onerror="shotErr(this)" alt=""><span class="cat tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></div><div class="shotmeta"><span class="d">${esc(l.domain)}</span></div></div>`;}
+function renderShotCats(rows){
+  const cats={};rows.forEach(l=>{cats[l.category]=(cats[l.category]||0)+1;});
+  const order=['gambling','redirect','malware','deface','pharma','adult','cloak','foreign_lang'].filter(c=>cats[c]);
+  document.getElementById('shotCatBar').innerHTML=`<span class="lab" style="font-size:11.5px;color:var(--muted);font-weight:700">ধরন:</span><span class="chip ${!curShotCat?'on':''}" data-sc="" onclick="setShotCat(this)">সব · ${bn(rows.length)}</span>`+order.map(c=>`<span class="chip ${curShotCat===c?'on':''}" data-sc="${c}" onclick="setShotCat(this)">${CAT[c]||c} · ${bn(cats[c])}</span>`).join('');
+}
+function lazyShots(){
+  const grid=document.getElementById('shotgrid');
+  if(shotObs)shotObs.disconnect();
+  shotObs=new IntersectionObserver((ents,o)=>{ents.forEach(e=>{if(e.isIntersecting){e.target.src=e.target.dataset.src;o.unobserve(e.target);}});},{rootMargin:'500px'});
+  grid.querySelectorAll('img[data-src]').forEach(im=>shotObs.observe(im));
+}
 function renderShots(){
   const grid=document.getElementById('shotgrid');if(!grid)return;
-  SHOTROWS=LEADS.filter(l=>(curShotRegion==='all'||(curShotRegion==='bd'?l.is_bd:!l.is_bd))&&(!curShotCat||l.category===curShotCat)).slice(0,240);
-  document.getElementById('shotHint').textContent=bn(SHOTROWS.length)+' সাইট'+(SHOTROWS.length>=240?' (top 240)':'');
-  grid.innerHTML=SHOTROWS.length?SHOTROWS.map((l,i)=>`<div class="shotcard" onclick="openLeadObj(SHOTROWS[${i}])"><div class="shotimg"><div class="ld">screenshot লোড হচ্ছে…</div><img loading="lazy" src="${shotUrl(l,500)}" onload="this.previousElementSibling.style.display='none'" onerror="shotErr(this)" alt=""><span class="cat tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></div><div class="shotmeta"><span class="d">${esc(l.domain)}</span></div></div>`).join(''):'<div class="empty" style="grid-column:1/-1">এই filter-এ সাইট নেই</div>';
+  SHOT_REGION_ROWS=LEADS.filter(l=>(curShotRegion==='all'||(curShotRegion==='bd'?l.is_bd:!l.is_bd)));
+  renderShotCats(SHOT_REGION_ROWS);
+  renderShotsGrid();
+}
+function renderShotsGrid(){
+  const grid=document.getElementById('shotgrid');if(!grid)return;
+  SHOTROWS=SHOT_REGION_ROWS.filter(l=>(!curShotCat||l.category===curShotCat));
+  document.getElementById('shotHint').textContent=bn(SHOTROWS.length)+' সাইট · scroll করলে screenshot load হবে';
+  if(!SHOTROWS.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1">এই filter-এ সাইট নেই</div>';return;}
+  if(curShotView==='ip'){
+    const groups={};SHOTROWS.forEach((l,i)=>{const ip=(l.ip&&l.ip!=='cdn')?l.ip:'__none';(groups[ip]=groups[ip]||[]).push(i);});
+    const keys=Object.keys(groups).sort((a,b)=>a==='__none'?1:b==='__none'?-1:groups[b].length-groups[a].length);
+    grid.innerHTML=keys.map(ip=>{
+      const idxs=groups[ip],named=ip!=='__none';
+      const head=`<div class="ch" style="grid-column:1/-1;border:1px solid var(--line);border-radius:11px;margin-top:5px">${named?`<span class="ip">${esc(ip)}</span><span class="meta">এই server-এ ${bn(idxs.length)}টি hacked site</span>`:'<span class="ip" style="color:var(--muted)">IP এখনো জানা যায়নি</span>'}<span class="cnt">${bn(idxs.length)}</span></div>`;
+      return head+idxs.map(i=>shotCard(SHOTROWS[i],i)).join('');
+    }).join('');
+  }else{
+    grid.innerHTML=SHOTROWS.map((l,i)=>shotCard(l,i)).join('');
+  }
+  lazyShots();
 }
 
 tick();loadLeads();loadFeed();

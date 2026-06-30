@@ -392,7 +392,7 @@ async function apiLeads(env, url) {
   const region = url.searchParams.get("region");   // bd | intl
   const biz = url.searchParams.get("biz");
   const onlyConfirmed = url.searchParams.get("confirmed") !== "0";
-  const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10) || 200, 1000);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10) || 200, 5000);
   const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
   const manual = url.searchParams.get("manual") === "1";
   let sql = "SELECT id,domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,ts,evidence,is_bd,biz_type,status,ip,is_manual,mbatch FROM findings WHERE status != 'rejected'";
