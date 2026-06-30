@@ -192,6 +192,59 @@ async function bumpCursor(env, ci) {
   await env.DB.prepare("INSERT INTO counters (metric,value) VALUES ('dir_cursor',?) ON CONFLICT(metric) DO UPDATE SET value=?").bind(ci + 1, ci + 1).run();
 }
 
+// ---- lead-coip: SHARED-IP lead multiplier (the 24/7 Worker port of harvester/lead_coip.py) ----
+// Confirmed hacks -> their shared-host IP -> every co-hosted neighbour (prime victims). Also
+// back-fills findings.ip so the dashboard can cluster leads by server. Bounded per run.
+const CDN_RE = /^(104\.21\.|172\.67\.|104\.16\.|104\.1[789]\.|172\.6[456]\.|188\.114\.|162\.159\.|104\.2[678]\.|151\.101\.|199\.232\.)/;
+
+async function reverseIpRapid(ip) {
+  try {
+    const r = await fetch(`https://rapiddns.io/sameip/${ip}?full=1`, { headers: { "user-agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(12000) });
+    const html = await readCappedH(r, 400000);
+    const hosts = new Set();
+    for (const m of html.matchAll(/>\s*([a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+\.[a-z]{2,})\s*</gi)) hosts.add(m[1].toLowerCase());
+    return [...hosts];
+  } catch (e) { return []; }
+}
+
+export async function harvestLeadCoip(env) {
+  const NRES = Number(env.LC_RESOLVE || 12), MAXIP = Number(env.LC_MAX_IPS || 4);
+  // 1) back-fill the hosting IP of confirmed leads still missing one (powers the cluster view)
+  const need = (await env.DB.prepare(
+    "SELECT domain FROM findings WHERE confirmed=1 AND status!='rejected' AND (ip IS NULL OR ip='') ORDER BY id LIMIT ?"
+  ).bind(NRES).all()).results || [];
+  let stored = 0;
+  const updates = [];
+  for (const row of need) {
+    const ip = await doh(row.domain);
+    const val = (ip && !CDN_RE.test(ip)) ? ip : "cdn";   // sentinel: CDN/unresolved leads won't re-resolve every run
+    if (val !== "cdn") stored++;
+    updates.push(env.DB.prepare("UPDATE findings SET ip=? WHERE domain=?").bind(val, row.domain));
+  }
+  if (updates.length) await env.DB.batch(updates);
+
+  // 2) reverse-IP a rotating slice of hotspot servers -> co-hosted neighbours -> queue them
+  const allIps = ((await env.DB.prepare(
+    "SELECT DISTINCT ip FROM findings WHERE confirmed=1 AND ip IS NOT NULL AND ip NOT IN ('','cdn') ORDER BY ip"
+  ).all()).results || []).map((r) => r.ip);
+  const curRow = await env.DB.prepare("SELECT value FROM counters WHERE metric='lc_ip_cursor'").first();
+  let off = curRow ? Number(curRow.value) : 0;
+  if (off >= allIps.length) off = 0;
+  const slice = allIps.slice(off, off + MAXIP);
+  const found = new Map();
+  for (const ip of slice) {
+    for (const h of await reverseIpRapid(ip)) {
+      const dom = registrable(h);
+      if (dom && !found.has(dom) && !HOST_PROVIDERS.has(dom)) found.set(dom, { domain: dom, bd: 50 });
+    }
+  }
+  const inserted = await insertDomains(env, "lead-coip", [...found.values()]);
+  const nextOff = (off + slice.length) >= allIps.length ? 0 : off + slice.length;
+  await setCounter(env, "lc_ip_cursor", nextOff);
+  await logHarvest(env, "lead-coip", `${need.length} resolved(+${stored} ip), ${slice.length} servers -> ${found.size} neighbours, ${inserted} new`);
+  return { resolved: stored, servers: slice.length, found: found.size, inserted };
+}
+
 export async function harvestCrtsh(env) {
   // crt.sh is slow/overloaded — try twice, accept whatever returns.
   for (let attempt = 0; attempt < 2; attempt++) {

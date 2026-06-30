@@ -387,9 +387,9 @@ function setGroup(g){
 function renderClusters(rows){
   const box=document.getElementById('clusters');
   const groups={};
-  rows.forEach(l=>{const ip=l.ip||'__none';(groups[ip]=groups[ip]||[]).push(l);});
+  rows.forEach(l=>{const ip=(l.ip&&l.ip!=='cdn')?l.ip:'__none';(groups[ip]=groups[ip]||[]).push(l);});
   const keys=Object.keys(groups).sort((a,b)=>{if(a==='__none')return 1;if(b==='__none')return -1;return groups[b].length-groups[a].length;});
-  const withIp=rows.filter(l=>l.ip).length, servers=keys.filter(k=>k!=='__none').length;
+  const withIp=rows.filter(l=>l.ip&&l.ip!=='cdn').length, servers=keys.filter(k=>k!=='__none').length;
   document.getElementById('clHint').textContent=bn(servers)+" server · "+bn(withIp)+"/"+bn(rows.length)+" IP জানা";
   box.innerHTML=keys.length?keys.map(ip=>{
     const g=groups[ip], named=ip!=='__none';

@@ -1,5 +1,5 @@
 import { scanTick, scanDomain, scanSlice, ingestResults } from "./scan.js";
-import { harvestReverseIp, harvestCrtsh, harvestDirectories, harvestCommonCrawl } from "./harvest.js";
+import { harvestReverseIp, harvestCrtsh, harvestDirectories, harvestCommonCrawl, harvestLeadCoip } from "./harvest.js";
 
 /**
  * BD Hack-Audit — Cloudflare Worker API
@@ -97,6 +97,7 @@ export default {
           if (body.source === "crtsh") return json({ ok: true, ...(await harvestCrtsh(env)) });
           if (body.source === "reverse") return json({ ok: true, ...(await harvestReverseIp(env)) });
           if (body.source === "directories") return json({ ok: true, ...(await harvestDirectories(env)) });
+          if (body.source === "leadcoip") return json({ ok: true, ...(await harvestLeadCoip(env)) });
           return json({ ok: true, ...(await harvestCommonCrawl(env)) });
         }
         if (path === "/heartbeat") return await heartbeat(env, body);
@@ -110,7 +111,7 @@ export default {
 
   async scheduled(event, env, ctx) {
     const c = event.cron;
-    if (c === "*/15 * * * *") ctx.waitUntil(housekeeping(env));
+    if (c === "*/15 * * * *") ctx.waitUntil(housekeeping(env).then(() => harvestLeadCoip(env)).catch(() => {}));  // housekeeping + 24/7 shared-IP lead multiplier
     else if (c === "*/20 * * * *") ctx.waitUntil(harvestCommonCrawl(env).catch(() => {}));   // Common Crawl *.bd (free, reliable firehose)
     else if (c === "37 */2 * * *") ctx.waitUntil(harvestDirectories(env).catch(() => {}));   // BD business directories (.com sites)
     else if (c === "13 */6 * * *") ctx.waitUntil(harvestCrtsh(env).catch(() => {}));         // crt.sh .bd identities
