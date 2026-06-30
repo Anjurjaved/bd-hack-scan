@@ -122,11 +122,13 @@ export async function harvestReverseIp(env) {
 
 // ---- BD business directories (Worker-friendly: sitemap -> listing pages -> business website) ----
 const DIR_SOURCES = [
-  { key: "bdtradeinfo", sitemap: "https://bdtradeinfo.com/sitemap-yellow-pages.xml", filter: "/company/", apex: "bdtradeinfo.com" },
+  { key: "bdtradeinfo", sitemap: "https://www.bdtradeinfo.com/sitemap-yellow-pages.xml", filter: "/company/", apex: "bdtradeinfo.com" },
   { key: "businessdirectory", sitemap: "https://businessdirectory.com.bd/wp-sitemap-posts-ait-item-1.xml", filter: "/item/", apex: "businessdirectory.com.bd" },
-  { key: "bdbusinessdirectory", sitemap: "https://bdbusinessdirectory.com/business-directory-sitemap.xml", filter: "", apex: "bdbusinessdirectory.com" },
+  { key: "bdbusinessdirectory", sitemap: "https://www.bdbusinessdirectory.com/sitemap_index.xml", child: "at_biz_dir-sitemap", filter: "/directory/", apex: "bdbusinessdirectory.com" },
+  { key: "bangladeshbusinessdir", sitemap: "https://bangladeshbusinessdir.com/sitemap.xml", child: "listing-sitemap", filter: "", apex: "bangladeshbusinessdir.com" },
+  { key: "bangladeshyp", sitemap: "https://www.bangladeshyp.com/sitemap.xml", filter: "/company/", apex: "bangladeshyp.com" },
 ];
-const DIR_SKIP = /facebook\.|fb\.com|instagram\.|twitter\.|x\.com|linkedin\.|youtube\.|youtu\.be|wa\.me|whatsapp\.|t\.me|telegram\.|pinterest\.|tiktok\.|google\.|goo\.gl|g\.page|bit\.ly|gravatar\.|wp\.com|w\.org|wordpress\.|gstatic\.|googleapis\.|schema\.org|example\.com|cloudflare|jsdelivr\.|fontawesome\.|bootstrapcdn\.|jquery\.|gmpg\.org/i;
+const DIR_SKIP = /facebook\.|fb\.com|instagram\.|twitter\.|x\.com|linkedin\.|youtube\.|youtu\.be|wa\.me|whatsapp\.|t\.me|telegram\.|pinterest\.|tiktok\.|google\.|goo\.gl|g\.page|bit\.ly|gravatar\.|wp\.com|w\.org|wordpress\.|gstatic\.|googleapis\.|schema\.org|example\.com|cloudflare|jsdelivr\.|fontawesome\.|bootstrapcdn\.|jquery\.|gmpg\.org|visitorsdetective\.|crunchbase\.|similarweb\.|semrush\.|alexa\.|trustpilot\.|glassdoor\.|owler\.|zoominfo\.|dnb\.com|bbb\.org|statshow\.|siteworthtraffic\.|w3schools\.|basis\.org|tradekey\.|alibaba\.|indiamart\.|yellowpages\.|justdial\.|maps\.app/i;
 
 function extractWebsite(text, apex) {
   const cands = [];
@@ -134,6 +136,9 @@ function extractWebsite(text, apex) {
   for (const m of text.matchAll(/(?:web\s*site|website|web)\s*[:\-]?\s*(?:<\/[^>]+>\s*)*(?:<a[^>]+href=['"])?\s*((?:https?:\/\/)?[a-z0-9.\-]+\.[a-z]{2,}[^\s'"<>]*)/gi)) cands.push(m[1]);
   let n = 0;
   for (const m of text.matchAll(/<a\b[^>]*\bhref\s*=\s*['"]([^'"]+)['"]/gi)) { cands.push(m[1]); if (++n > 300) break; }
+  // plain-text URLs (e.g. bdtradeinfo lists the website as bare text in an <h6>, no anchor)
+  let p = 0;
+  for (const m of text.matchAll(/https?:\/\/[a-z0-9.\-]+\.[a-z]{2,}[^\s'"<>,)]*/gi)) { cands.push(m[0]); if (++p > 300) break; }
   for (let raw of cands) {
     raw = (raw || "").trim();
     if (!raw || /^(#|mailto:|tel:|javascript:)/.test(raw)) continue;
@@ -156,6 +161,20 @@ export async function harvestDirectories(env) {
     const r = await fetch(src.sitemap, { headers: { "user-agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(20000) });
     const txt = (await r.text()).slice(0, 4000000);
     locs = [...txt.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
+    // sitemap INDEX -> follow a rotating child listing-sitemap (e.g. bdbusinessdirectory, bangladeshbusinessdir)
+    if (src.child) {
+      const children = locs.filter((u) => u.includes(src.child) && u.endsWith(".xml"));
+      if (children.length) {
+        const offc = await env.DB.prepare("SELECT value FROM counters WHERE metric=?").bind("dir_child_" + src.key).first();
+        const cidx = (offc ? Number(offc.value) : 0) % children.length;
+        try {
+          const cr = await fetch(children[cidx], { headers: { "user-agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(20000) });
+          const ctxt = (await cr.text()).slice(0, 4000000);
+          locs = [...ctxt.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
+        } catch (e) { /* keep index locs */ }
+        await env.DB.prepare("INSERT INTO counters (metric,value) VALUES (?,?) ON CONFLICT(metric) DO UPDATE SET value=?").bind("dir_child_" + src.key, cidx + 1, cidx + 1).run();
+      }
+    }
     if (src.filter) { const f = locs.filter((u) => u.includes(src.filter)); if (f.length) locs = f; }
   } catch (e) { await bumpCursor(env, ci); return { source: src.key, inserted: 0, error: "sitemap " + String(e).slice(0, 50) }; }
   if (!locs.length) { await bumpCursor(env, ci); return { source: src.key, inserted: 0, note: "no listings" }; }
