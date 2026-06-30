@@ -445,3 +445,28 @@ export async function ingestResults(env, agg) {
 export async function scanTick(env, n) {
   return await ingestResults(env, await scanSlice(env, n));
 }
+
+// scanOneVerified — full deep scan of ONE domain + the SAME Gemini/Groq Stage-2 verify the
+// queue uses (no steps skipped). Used by the dashboard's manual on-demand scan. Returns a
+// finding-shaped object whether the site is hacked OR clean (so the user sees every result).
+export async function scanOneVerified(env, domain) {
+  const sc = await scanDomain(env, { domain });
+  if (sc.error) return { domain, error: sc.error };
+  let status = sc.status, confirmed = sc.confirmed, verdict = sc.verdict, biz = sc.bizType;
+  let reason = `posterior=${sc.posterior} buckets=${sc.nbuckets}${sc.hard ? " HARD" : ""}`;
+  if (sc.flagged && ["gambling", "adult", "foreign_lang"].includes(sc.category)) {
+    const ev = sc.evidence.map((e) => e.url + " " + e.match).join("; ");
+    const v = (await geminiVerify(env, domain, sc.title, sc.excerpt, ev)) || (await groqVerify(env, domain, sc.title, sc.excerpt, ev));
+    if (v) {
+      if (v.classification === "hacked_client") { status = "lead"; confirmed = 1; }
+      else { status = v.classification; confirmed = 0; }
+      biz = v.business_type || biz; verdict = "ai-" + v.classification; reason = "ai:" + v.classification + " — " + v.reason;
+    }
+  }
+  return {
+    domain, flagged: sc.flagged ? 1 : 0, confirmed: confirmed ? 1 : 0, category: sc.category || "",
+    verdict, reason, proof: sc.proof || "", proofUrl: sc.proofUrl || "", layers: (sc.layers || []).join(","),
+    title: sc.title || "", httpStatus: sc.httpStatus || 0, isBd: sc.isBd ? 1 : 0, bizType: biz || "",
+    status, evidence: sc.evidence || [],
+  };
+}

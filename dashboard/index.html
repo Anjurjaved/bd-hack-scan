@@ -178,6 +178,7 @@
     <div class="tab" data-v="sources"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M5 10l7-7 7 7"/></svg> উৎস / Harvest</div>
     <div class="tab" data-v="system"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg> Workers / System</div>
     <div class="tab" data-v="feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Live Feed</div>
+    <div class="tab" data-v="manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg> Manual Scan</div>
   </div>
 
   <!-- OVERVIEW -->
@@ -248,6 +249,26 @@
   <!-- FEED -->
   <div class="view" id="v-feed"><div class="panel"><h2>live feed — scan + harvest activity (কোন source কত domain আনল, কী hacked পাওয়া গেল)</h2><div class="feed" id="feed"></div></div></div>
 
+  <!-- MANUAL SCAN -->
+  <div class="view" id="v-manual">
+    <div class="panel">
+      <h2>Manual Scan — নিজের পছন্দমতো site instant scan (সব deep step সহ)<small id="manHint"></small></h2>
+      <div class="pad">
+        <textarea id="manDomains" rows="4" placeholder="domain গুলো কমা(,) দিয়ে, space ছাড়া — যেমন: abc.com,xyz.com.bd,example.org   (৫ / ৯০ / ১০০ / ১০০০ — যত খুশি দিন)" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-family:var(--fm);font-size:12.5px;resize:vertical"></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:9px">
+          <input id="manName" placeholder="batch নাম (ঐচ্ছিক) — multiple দিলে এই নামে আলাদা block-এ জমা হবে" style="flex:1;min-width:160px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:12.5px"/>
+          <button class="btn em" id="manBtn" onclick="runManual()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Scan করুন</button>
+          <span id="manProg" class="bn-num" style="color:var(--muted);font-size:12px"></span>
+        </div>
+        <div id="manLive" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:13px">
+      <h2>সংরক্ষিত manual scan — batch অনুযায়ী<small id="manStoreHint"></small></h2>
+      <div id="manStore" class="pad"><div class="empty">এখনো manual scan করা হয়নি</div></div>
+    </div>
+  </div>
+
   <footer>BD Hack-Audit · 100% free (Cloudflare Workers cron · ৮ parallel shard) · তৈরি করেছে <a href="https://javeditsolution.com" target="_blank" rel="noopener noreferrer">Javed IT Solution</a></footer>
 </div>
 
@@ -290,7 +311,8 @@ let LEADS=[], curCat="", curRegion="bd", curBiz="", curGroup="", STATS={};
 document.getElementById('tabs').onclick=e=>{const t=e.target.closest('.tab');if(!t)return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+t.dataset.v));
-  if(t.dataset.region){curRegion=t.dataset.region;curBiz="";renderLeads();}};
+  if(t.dataset.region){curRegion=t.dataset.region;curBiz="";renderLeads();}
+  if(t.dataset.v==='manual')loadManualStore();};
 
 // ---- charts ----
 function lineChart(svg,series,max,colors){const W=800,H=190,P=6;svg.innerHTML="";if(!series[0]||series[0].length<2){svg.innerHTML='<text x="400" y="95" text-anchor="middle" fill="#5b7088" font-size="13" font-family="Inter">data নেই</text>';return;}
@@ -512,6 +534,59 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
 async function loadFeed(){try{const r=await(await fetch(API+"/api/feed?limit=60",{cache:'no-store'})).json();const f=r.feed||[];
   document.getElementById('feed').innerHTML=f.length?f.map(x=>{const h=x.kind==='harvest';const tag=h?'<span class="tag t-redirect">সংগ্রহ</span>':'<span class="tag t-gambling">hacked</span>';return `<div class="it"><span class="when">${ago(x.ts)}</span><div><div class="dom">${tag} ${esc(x.domain)}</div><div style="color:var(--muted);font-size:11.5px">${esc(x.detail)}</div></div></div>`;}).join(''):'<div class="empty">scan / harvest activity এলে এখানে live দেখা যাবে</div>';}catch(e){}}
+
+// ---- manual scan ----
+function manRow(r){
+  const hacked=r.hacked||r.confirmed;
+  const badge=r.error?`<span class="tag t-foreign_lang">error</span>`
+    :hacked?`<span class="tag t-gambling">HACKED · ${CAT[r.category]||r.category||'?'}</span>`
+    :r.flagged?`<span class="tag t-cloak">সন্দেহজনক</span>`
+    :`<span class="tag t-redirect">clean</span>`;
+  return `<div style="border:1px solid var(--line);border-radius:9px;padding:8px 11px;margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><span class="mono" style="font-size:12px">${esc(r.domain)}</span>${badge}</div>
+    ${r.error?`<div style="font-size:11px;color:var(--muted)">${esc(r.error)}</div>`:''}
+    ${r.proofUrl?`<a href="${esc(r.proofUrl)}" target="_blank" rel="noopener" class="mono" style="font-size:10.5px;color:var(--blue);word-break:break-all">${esc(r.proofUrl)}</a>`:''}
+  </div>`;
+}
+async function runManual(){
+  const raw=(document.getElementById('manDomains').value||'').trim();
+  const name=(document.getElementById('manName').value||'').trim();
+  const doms=[...new Set(raw.split(/[,\s]+/).map(s=>s.trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\/.*$/,'')).filter(Boolean))];
+  if(!doms.length){alert('অন্তত একটি domain দিন (কমা দিয়ে আলাদা করুন)');return;}
+  const btn=document.getElementById('manBtn');btn.disabled=true;btn.style.opacity=.6;
+  const live=document.getElementById('manLive');live.innerHTML='';
+  const prog=document.getElementById('manProg');prog.textContent='০/'+bn(doms.length);
+  const CH=4,CONC=3,chunks=[];for(let i=0;i<doms.length;i+=CH)chunks.push(doms.slice(i,i+CH));
+  let done=0;
+  async function worker(){
+    while(chunks.length){
+      const ch=chunks.shift();
+      try{const r=await(await fetch(API+'/scan_manual',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({domains:ch.join(','),name})})).json();
+        (r.results||[]).forEach(x=>live.insertAdjacentHTML('beforeend',manRow(x)));
+      }catch(e){ch.forEach(d=>live.insertAdjacentHTML('beforeend',manRow({domain:d,error:'failed'})));}
+      done+=ch.length;prog.textContent=bn(Math.min(done,doms.length))+'/'+bn(doms.length)+' scanned';
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(CONC,chunks.length)},worker));
+  prog.textContent=bn(doms.length)+' ✓ scanned';btn.disabled=false;btn.style.opacity=1;
+  loadManualStore();
+}
+async function loadManualStore(){
+  try{
+    const r=await(await fetch(API+'/api/leads?manual=1&confirmed=0&limit=1000',{cache:'no-store'})).json();
+    const ls=r.leads||[],box=document.getElementById('manStore');
+    document.getElementById('manStoreHint').textContent=bn(ls.length)+' manual';
+    if(!ls.length){box.innerHTML='<div class="empty">এখনো সংরক্ষিত manual scan নেই</div>';return;}
+    const groups={};ls.forEach(l=>{const b=l.mbatch||'(নামহীন batch)';(groups[b]=groups[b]||[]).push(l);});
+    box.innerHTML=Object.keys(groups).map(b=>{
+      const g=groups[b],hk=g.filter(x=>x.confirmed).length;
+      const items=g.map(l=>`<div style="border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--panel)">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="mono" style="font-size:11.5px">${esc(l.domain)}</span>${l.confirmed?`<span class="tag t-${l.category}">${CAT[l.category]||l.category}</span>`:'<span class="tag t-redirect">clean</span>'}</div>
+        ${l.proof_url?`<a href="${esc(l.proof_url)}" target="_blank" rel="noopener" class="mono" style="font-size:10px;color:var(--blue);word-break:break-all">${esc(l.proof_url)}</a>`:''}</div>`).join('');
+      return `<div class="cluster"><div class="ch"><span class="ip">${esc(b)}</span><span class="meta">${bn(g.length)} site · ${bn(hk)} hacked</span><span class="cnt">${bn(hk)}</span></div><div class="cgrid">${items}</div></div>`;
+    }).join('');
+  }catch(e){}
+}
 
 tick();loadLeads();loadFeed();
 setInterval(tick,15000);setInterval(loadFeed,15000);setInterval(loadLeads,30000);

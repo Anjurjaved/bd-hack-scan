@@ -1,5 +1,5 @@
-import { scanTick, scanDomain, scanSlice, ingestResults } from "./scan.js";
-import { harvestReverseIp, harvestCrtsh, harvestDirectories, harvestCommonCrawl, harvestLeadCoip } from "./harvest.js";
+import { scanTick, scanDomain, scanSlice, ingestResults, scanOneVerified } from "./scan.js";
+import { harvestReverseIp, harvestCrtsh, harvestDirectories, harvestCommonCrawl, harvestLeadCoip, harvestBdIpSweep } from "./harvest.js";
 
 /**
  * BD Hack-Audit — Cloudflare Worker API
@@ -78,6 +78,10 @@ export default {
       if (request.method === "POST" && path === "/reject") {
         return await rejectLead(env, await request.json().catch(() => ({})));
       }
+      // public write: dashboard manual on-demand scan (capped 4/call, not destructive)
+      if (request.method === "POST" && path === "/scan_manual") {
+        return await scanManual(env, await request.json().catch(() => ({})));
+      }
 
       // ---- authed writes ----
       if (request.method === "POST") {
@@ -98,6 +102,7 @@ export default {
           if (body.source === "reverse") return json({ ok: true, ...(await harvestReverseIp(env)) });
           if (body.source === "directories") return json({ ok: true, ...(await harvestDirectories(env)) });
           if (body.source === "leadcoip") return json({ ok: true, ...(await harvestLeadCoip(env)) });
+          if (body.source === "bdipsweep") return json({ ok: true, ...(await harvestBdIpSweep(env)) });
           return json({ ok: true, ...(await harvestCommonCrawl(env)) });
         }
         if (path === "/heartbeat") return await heartbeat(env, body);
@@ -112,9 +117,9 @@ export default {
   async scheduled(event, env, ctx) {
     const c = event.cron;
     if (c === "*/15 * * * *") ctx.waitUntil(housekeeping(env).then(() => harvestLeadCoip(env)).catch(() => {}));  // housekeeping + 24/7 shared-IP lead multiplier
-    else if (c === "*/20 * * * *") ctx.waitUntil(harvestCommonCrawl(env).catch(() => {}));   // Common Crawl *.bd (free, reliable firehose)
+    else if (c === "*/20 * * * *") ctx.waitUntil(Promise.allSettled([harvestCommonCrawl(env), harvestReverseIp(env)]));  // Common Crawl + reverse-IP snowball (co-hosted BD businesses)
     else if (c === "37 */2 * * *") ctx.waitUntil(harvestDirectories(env).catch(() => {}));   // BD business directories (.com sites)
-    else if (c === "13 */6 * * *") ctx.waitUntil(harvestCrtsh(env).catch(() => {}));         // crt.sh .bd identities
+    else if (c === "13 */6 * * *") ctx.waitUntil(Promise.allSettled([harvestCrtsh(env), harvestBdIpSweep(env)]));        // crt.sh .bd identities + BD IP-space sweep
     else ctx.waitUntil(scanFanout(env).catch(() => {}));                                       // every minute: scan (shard 0 + fan-out to shards 1..N)
   },
 };
@@ -389,17 +394,48 @@ async function apiLeads(env, url) {
   const onlyConfirmed = url.searchParams.get("confirmed") !== "0";
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10) || 200, 1000);
   const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
-  let sql = "SELECT id,domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,ts,evidence,is_bd,biz_type,status,ip FROM findings WHERE status != 'rejected'";
+  const manual = url.searchParams.get("manual") === "1";
+  let sql = "SELECT id,domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,ts,evidence,is_bd,biz_type,status,ip,is_manual,mbatch FROM findings WHERE status != 'rejected'";
   const binds = [];
-  if (onlyConfirmed) sql += " AND confirmed=1";
-  if (region === "bd") sql += " AND is_bd=1";
-  else if (region === "intl") sql += " AND is_bd=0";
+  if (manual) {
+    sql += " AND is_manual=1";
+  } else {
+    sql += " AND (is_manual IS NULL OR is_manual=0)";
+    if (onlyConfirmed) sql += " AND confirmed=1";
+    if (region === "bd") sql += " AND is_bd=1";
+    else if (region === "intl") sql += " AND is_bd=0";
+  }
   if (cat) { sql += " AND category=?"; binds.push(cat); }
   if (biz) { sql += " AND biz_type=?"; binds.push(biz); }
   sql += " ORDER BY ts DESC LIMIT ? OFFSET ?";
   binds.push(limit, offset);
   const rs = await env.DB.prepare(sql).bind(...binds).all();
   return json({ ok: true, leads: rs.results || [], limit, offset });
+}
+
+// Manual on-demand scan — the user pastes domain(s); we run the FULL deep scan + the same
+// Gemini/Groq verify (no steps skipped), store results under a named batch (is_manual=1), and
+// return them instantly. Bulk lists are chunked by the dashboard (cap per call = worker subreq
+// budget). body: { domains: "a.com,b.com" | [..], name?: "<batch label>" }
+async function scanManual(env, body) {
+  const name = String(body.name || "").slice(0, 60);
+  let domains = Array.isArray(body.domains) ? body.domains : String(body.domains || "").split(",");
+  domains = [...new Set(domains.map(normalizeDomain).filter(Boolean))].slice(0, 4); // cap/call: scanDomain is subreq-heavy
+  if (!domains.length) return json({ ok: true, scanned: 0, results: [] });
+  const now = nowSec();
+  const out = [], stmts = [];
+  for (const dom of domains) {
+    let r;
+    try { r = await scanOneVerified(env, dom); } catch (e) { r = { domain: dom, error: "scan failed" }; }
+    if (r.error) { out.push({ domain: dom, error: r.error }); continue; }
+    out.push({ domain: dom, hacked: r.confirmed, flagged: r.flagged, category: r.category, verdict: r.verdict, reason: r.reason, proofUrl: r.proofUrl, proof: r.proof, status: r.status, isBd: r.isBd });
+    stmts.push(env.DB.prepare("DELETE FROM findings WHERE domain=? AND is_manual=1").bind(dom));
+    stmts.push(env.DB.prepare(
+      "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,pass_no,first_ts,ts,evidence,is_bd,biz_type,status,is_manual,mbatch) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).bind(dom, "", "", r.category, (r.layers || "").slice(0, 200), (r.proof || "").slice(0, 600), (r.proofUrl || "").slice(0, 300), r.httpStatus || 0, (r.verdict || "").slice(0, 20), (r.reason || "").slice(0, 400), r.confirmed ? 1 : 0, 1, now, now, JSON.stringify(r.evidence || []).slice(0, 4000), r.isBd ? 1 : 0, (r.bizType || "").slice(0, 30), (r.status || "manual").slice(0, 16), 1, name));
+  }
+  if (stmts.length) await env.DB.batch(stmts);
+  return json({ ok: true, scanned: out.length, results: out });
 }
 
 // Bulk-store the hosting IP of confirmed leads (from the lead-coip harvester / worker cron).

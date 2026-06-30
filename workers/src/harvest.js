@@ -97,9 +97,9 @@ export async function harvestReverseIp(env) {
   const SEEDN = Number(env.RIP_SEED || 25), MAXIP = Number(env.RIP_MAX_IPS || 12);
   const cur = await env.DB.prepare("SELECT value FROM counters WHERE metric='rip_seed_cursor'").first();
   let off = cur ? Number(cur.value) : 0;
-  let rs = await env.DB.prepare("SELECT domain FROM domains WHERE domain LIKE '%.bd' ORDER BY rowid LIMIT ? OFFSET ?").bind(SEEDN, off).all();
+  let rs = await env.DB.prepare("SELECT domain FROM domains WHERE bd_score >= 25 ORDER BY rowid LIMIT ? OFFSET ?").bind(SEEDN, off).all();
   let seeds = (rs.results || []).map((r) => r.domain);
-  if (!seeds.length) { off = 0; rs = await env.DB.prepare("SELECT domain FROM domains WHERE domain LIKE '%.bd' ORDER BY rowid LIMIT ?").bind(SEEDN).all(); seeds = (rs.results || []).map((r) => r.domain); }
+  if (!seeds.length) { off = 0; rs = await env.DB.prepare("SELECT domain FROM domains WHERE bd_score >= 25 ORDER BY rowid LIMIT ?").bind(SEEDN).all(); seeds = (rs.results || []).map((r) => r.domain); }
   const ips = new Set();
   for (const s of seeds) {
     const ip = await doh(s);
@@ -108,18 +108,11 @@ export async function harvestReverseIp(env) {
   const ipList = [...ips].slice(0, MAXIP);
   const found = new Map();
   for (const ip of ipList) {
-    try {
-      // free HackerTarget per-IP quota is exhausted on shared Cloudflare egress IPs; a free
-      // API key (env HACKERTARGET_KEY) makes the quota per-KEY so it works from the Worker.
-      const kq = env.HACKERTARGET_KEY ? `&apikey=${env.HACKERTARGET_KEY}` : "";
-      const r = await fetch(`https://api.hackertarget.com/reverseiplookup/?q=${ip}${kq}`, { headers: { "user-agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(12000) });
-      const txt = await r.text();
-      if (/api count exceeded|too many|rate limit/i.test(txt)) break;
-      for (const line of txt.split("\n")) {
-        const dom = registrable(line.trim());
-        if (dom && !found.has(dom) && !HOST_PROVIDERS.has(dom)) found.set(dom, { domain: dom, bd: 25 });
-      }
-    } catch (e) { /* skip this IP */ }
+    // rapiddns works from the Worker's shared egress IP; HackerTarget needs a paid key there.
+    for (const h of await reverseIpRapid(ip)) {
+      const dom = registrable(h);
+      if (dom && !found.has(dom) && !HOST_PROVIDERS.has(dom)) found.set(dom, { domain: dom, bd: dom.endsWith(".bd") ? 50 : 30 });
+    }
   }
   const inserted = await insertDomains(env, "reverse-ip", [...found.values()]);
   await env.DB.prepare("INSERT INTO counters (metric,value) VALUES ('rip_seed_cursor',?) ON CONFLICT(metric) DO UPDATE SET value=?").bind(off + SEEDN, off + SEEDN).run();
@@ -243,6 +236,41 @@ export async function harvestLeadCoip(env) {
   await setCounter(env, "lc_ip_cursor", nextOff);
   await logHarvest(env, "lead-coip", `${need.length} resolved(+${stored} ip), ${slice.length} servers -> ${found.size} neighbours, ${inserted} new`);
   return { resolved: stored, servers: slice.length, found: found.size, inserted };
+}
+
+// BD IP-space sweep — reverse-IP across Bangladesh's allocated IP blocks (ipdeny free CIDR list).
+// Rotating: a window of CIDRs per run, sample a host IP in each, rapiddns reverse-IP -> BD-hosted
+// domains. Supplementary firehose (blind IPs are lower-yield than the snowball, but it covers BD
+// hosting we have no seed for). Bounded; no key, no card.
+export async function harvestBdIpSweep(env) {
+  const MAXIP = Number(env.BDIP_MAX || 6);
+  let cidrs = [];
+  try {
+    const r = await fetch("https://www.ipdeny.com/ipblocks/data/countries/bd.zone", { headers: { "user-agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(15000) });
+    cidrs = (await r.text()).split("\n").map((s) => s.trim()).filter((s) => /^\d+\.\d+\.\d+\.\d+\/\d+$/.test(s));
+  } catch (e) { return { error: "ipdeny " + String(e).slice(0, 40) }; }
+  if (!cidrs.length) return { cidrs: 0 };
+  const curRow = await env.DB.prepare("SELECT value FROM counters WHERE metric='bdip_cursor'").first();
+  let cur = curRow ? Number(curRow.value) : 0;
+  const ips = [];
+  for (let i = 0; i < MAXIP; i++) {
+    const cidr = cidrs[(cur + i) % cidrs.length];
+    const b = cidr.split("/")[0].split(".").map(Number);
+    // sample a couple of likely-host octets inside the block (rotate the last octet by the run)
+    const last = 1 + ((cur + i) % 3) * 5;   // .1 / .6 / .11 across runs — cheap spread
+    ips.push(`${b[0]}.${b[1]}.${b[2]}.${last}`);
+  }
+  await setCounter(env, "bdip_cursor", (cur + MAXIP) % cidrs.length);
+  const found = new Map();
+  for (const ip of ips) {
+    for (const h of await reverseIpRapid(ip)) {
+      const dom = registrable(h);
+      if (dom && !found.has(dom) && !HOST_PROVIDERS.has(dom)) found.set(dom, { domain: dom, bd: dom.endsWith(".bd") ? 65 : 35 });
+    }
+  }
+  const inserted = await insertDomains(env, "bd-ip-sweep", [...found.values()]);
+  await logHarvest(env, "bd-ip-sweep", `${ips.length} BD IPs -> ${found.size} domains, ${inserted} new`);
+  return { cidrs: cidrs.length, ips: ips.length, found: found.size, inserted };
 }
 
 export async function harvestCrtsh(env) {
