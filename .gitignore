@@ -13,3 +13,6 @@ deploy/scanner.env
 scanner.env
 .venv/
 venv/
+
+# harvester runtime state
+harvester/.*_state.json

@@ -18,12 +18,14 @@ on:
           - directories
           - osm
           - reverse-ip
+          - lead-coip
           - global
   schedule:
     - cron: "17 */2 * * *"   # crt.sh — the .bd firehose — every ~2h
     - cron: "37 */3 * * *"   # directories (Website-field) — every ~3h
     - cron: "53 4 * * *"     # OpenStreetMap (Overpass) — daily
     - cron: "7 */6 * * *"    # reverse-IP on BD hosting ASNs — every ~6h
+    - cron: "43 */4 * * *"   # lead-coip — co-hosted neighbours of confirmed hacks — every ~4h
     - cron: "27 1,13 * * *"  # top-ranked GLOBAL feeder — twice daily, paced
 
 permissions:
@@ -38,6 +40,7 @@ jobs:
       SCHED_DIRECTORIES: "37 */3 * * *"
       SCHED_OSM: "53 4 * * *"
       SCHED_REVERSE_IP: "7 */6 * * *"
+      SCHED_LEAD_COIP: "43 */4 * * *"
       SCHED_GLOBAL: "27 1,13 * * *"
     concurrency:
       group: harvest-${{ github.event.schedule || github.event.inputs.source || 'all' }}
@@ -64,6 +67,7 @@ jobs:
               "$SCHED_DIRECTORIES") SOURCE=directories ;;
               "$SCHED_OSM")         SOURCE=osm ;;
               "$SCHED_REVERSE_IP")  SOURCE=reverse-ip ;;
+              "$SCHED_LEAD_COIP")   SOURCE=lead-coip ;;
               "$SCHED_GLOBAL")      SOURCE=global ;;
               *)                    SOURCE=all ;;
             esac
@@ -86,6 +90,7 @@ jobs:
               directories) file=harvester/directories.py ;;
               osm)         file=harvester/osm.py ;;
               reverse-ip)  file=harvester/reverse_ip.py ;;
+              lead-coip)   file=harvester/lead_coip.py ;;
               global)      file=harvester/global_feeder.py ;;
               *) echo "Unknown source: $name" >&2; return 1 ;;
             esac
@@ -96,7 +101,7 @@ jobs:
           SRC="${{ steps.pick.outputs.source }}"
           if [ "$SRC" = "all" ]; then
             # BD sources first, then a bounded global chunk
-            for s in crtsh directories osm reverse-ip global; do run_one "$s"; done
+            for s in crtsh directories osm reverse-ip lead-coip global; do run_one "$s"; done
           else
             run_one "$SRC"
           fi

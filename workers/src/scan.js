@@ -323,6 +323,47 @@ async function groqVerify(env, domain, title, excerpt, evidence) {
   return null;
 }
 
+// ---- Gemini Stage-2 (primary verifier; 17-key ordered rotation per global key-pool) ----
+// Ordered rotation: start at key #1, on 429/RESOURCE_EXHAUSTED jump to the NEXT key
+// immediately (never re-hammer an exhausted key), on 400/403 mark the key dead for this
+// isolate, on 200 keep using the current key until it 429s. State persists across calls
+// in the same Worker isolate, so the cursor walks #1→#17 and wraps. Groq stays as fallback.
+let GEM_IDX = 0;
+const GEM_DEAD = new Set();
+const geminiEp = (model, key) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+
+async function geminiVerify(env, domain, title, excerpt, evidence) {
+  const keys = (env.GEMINI_API_KEYS || "").split(",").map((k) => k.trim()).filter(Boolean);
+  if (!keys.length) return null;
+  const model = env.GEMINI_MODEL || "gemini-2.5-flash";
+  const user = `domain: ${domain}\ntitle: ${title}\nhomepage excerpt: ${excerpt.slice(0, 1500)}\n\nDETECTED SPAM EVIDENCE:\n${evidence.slice(0, 1100)}`;
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: GROQ_SYS }] },
+    contents: [{ role: "user", parts: [{ text: user }] }],
+    generationConfig: { temperature: 0, maxOutputTokens: 250, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } },
+  });
+  for (let tries = 0; tries < keys.length; tries++) {
+    if (GEM_DEAD.size >= keys.length) break;
+    let guard = 0;
+    while (GEM_DEAD.has(GEM_IDX % keys.length) && guard++ < keys.length) GEM_IDX++;
+    const idx = GEM_IDX % keys.length;
+    try {
+      const r = await fetch(geminiEp(model, keys[idx]), { method: "POST", headers: { "content-type": "application/json" }, body });
+      if (r.status === 429) { GEM_IDX++; continue; }                       // quota exhausted → next key
+      if (r.status === 400 || r.status === 403) { GEM_DEAD.add(idx); GEM_IDX++; continue; } // invalid/denied → dead key
+      if (!r.ok) { GEM_IDX++; continue; }
+      const j = await r.json();
+      const txt = (j && j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts && j.candidates[0].content.parts[0] && j.candidates[0].content.parts[0].text) || "";
+      if (!txt) return null;
+      const obj = JSON.parse(txt);
+      const cls = String(obj.classification || "").toLowerCase();
+      if (!["hacked_client", "genuine_spam", "false_positive"].includes(cls)) return null;
+      return { classification: cls, business_type: (obj.business_type || "").toLowerCase(), reason: (obj.reason || "").slice(0, 200) };
+    } catch (e) { GEM_IDX++; continue; }
+  }
+  return null;
+}
+
 const DHAKA = 6 * 3600;
 const dDay = (ts) => new Date((ts + DHAKA) * 1000).toISOString().slice(0, 10);
 const dHour = (ts) => new Date((ts + DHAKA) * 1000).toISOString().slice(0, 13).replace("T", "-");
@@ -350,11 +391,12 @@ export async function scanSlice(env, n) {
     if (!sc.flagged) continue;
     let status = sc.status, confirmed = sc.confirmed, verdict = sc.verdict, reason = `posterior=${sc.posterior} buckets=${sc.nbuckets}${sc.hard ? " HARD" : ""}`, biz = sc.bizType;
     if (["gambling", "adult", "foreign_lang"].includes(sc.category)) {
-      const v = await groqVerify(env, r.domain, sc.title, sc.excerpt, sc.evidence.map((e) => e.url + " " + e.match).join("; "));
+      const _ev = sc.evidence.map((e) => e.url + " " + e.match).join("; ");
+      const v = (await geminiVerify(env, r.domain, sc.title, sc.excerpt, _ev)) || (await groqVerify(env, r.domain, sc.title, sc.excerpt, _ev));
       if (v) {
         if (v.classification === "hacked_client") { status = "lead"; confirmed = 1; }
         else continue;
-        biz = v.business_type || biz; verdict = "groq-" + v.classification; reason = "groq:" + v.classification + " — " + v.reason;
+        biz = v.business_type || biz; verdict = "ai-" + v.classification; reason = "ai:" + v.classification + " — " + v.reason;
       } else if (sc.status === "spam_site") continue;
     } else if (sc.status === "spam_site") continue;
     findings.push({ domain: r.domain, business: r.business, phone: r.phone, category: sc.category, layers: sc.layers.join(","), proof: sc.proof, proofUrl: sc.proofUrl, httpStatus: sc.httpStatus, nbuckets: sc.nbuckets, verdict, reason, confirmed, evidence: sc.evidence, isBd: sc.isBd, bizType: biz, status });
