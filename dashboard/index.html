@@ -558,6 +558,8 @@ function openLeadObj(l){
     `<img class="mshot" loading="lazy" src="${shotUrl(l,760)}" onerror="this.style.display='none'" alt="আক্রান্ত পেজের screenshot">
      <div class="kv"><span class="k">verdict</span><span><b>${esc(l.stage2_verdict||'confirmed')}</b> · ${esc(l.stage2_reason||'')}</span>
       <span class="k">type · region</span><span>${esc(l.biz_type||'—')} · ${l.is_bd?'বাংলাদেশি':'International'}</span>
+      <span class="k">ঠিকানা</span><span>${(l.address&&l.address!=='-')?esc(l.address):'<span style="color:var(--muted)">— (scan-এ পাওয়া যায়নি)</span>'}</span>
+      <span class="k">জেলা/এলাকা</span><span>${(l.district&&l.district!=='-')?esc(l.district):'—'}</span>
       <span class="k">layers</span><span class="mono">${esc(l.layers||'')}</span>
       <span class="k">HTTP</span><span>${bn(l.http_status||0)}</span>
       <span class="k">phone</span><span class="mono">${esc(l.phone||'—')}</span>

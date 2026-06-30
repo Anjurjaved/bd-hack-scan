@@ -80,6 +80,49 @@ async function fetchPage(url, ua, referer, ms = 11000) {
   }
 }
 
+// ---- BD address / contact extraction (regex only, ZERO LLM) — feeds geographic grouping ----
+const BD_DISTRICTS = ["Dhaka","Gazipur","Narayanganj","Narsingdi","Manikganj","Munshiganj","Tangail","Kishoreganj","Faridpur","Gopalganj","Madaripur","Shariatpur","Rajbari","Chattogram","Chittagong","Cox's Bazar","Coxs Bazar","Cumilla","Comilla","Brahmanbaria","Chandpur","Feni","Lakshmipur","Noakhali","Khagrachhari","Rangamati","Bandarban","Sylhet","Moulvibazar","Habiganj","Sunamganj","Rajshahi","Bogura","Bogra","Pabna","Sirajganj","Natore","Naogaon","Joypurhat","Chapainawabganj","Khulna","Jashore","Jessore","Satkhira","Bagerhat","Jhenaidah","Magura","Narail","Kushtia","Chuadanga","Meherpur","Barishal","Barisal","Bhola","Patuakhali","Pirojpur","Barguna","Jhalokati","Rangpur","Dinajpur","Thakurgaon","Panchagarh","Nilphamari","Lalmonirhat","Kurigram","Gaibandha","Mymensingh","Jamalpur","Sherpur","Netrokona"];
+const BD_AREAS = ["Mirpur","Pallabi","Kazipara","Shewrapara","Kafrul","Agargaon","Mohammadpur","Shyamoli","Adabor","Dhanmondi","Lalmatia","Gulshan","Banani","Baridhara","Bashundhara","Badda","Rampura","Khilgaon","Motijheel","Paltan","Segunbagicha","Malibagh","Moghbazar","Mohakhali","Tejgaon","Farmgate","Karwan Bazar","Kawran Bazar","Panthapath","Uttara","Khilkhet","Mugda","Jatrabari","Demra","Old Dhaka","Lalbagh","Wari","Kamrangirchar","Savar","Keraniganj","Tongi","Gabtoli","Mirpur DOHS","Banasree","Aftabnagar","Cantonment","Eskaton","Bijoy Nagar","Bangla Motor","Shantinagar","New Market","Elephant Road","Green Road","Shahbagh","Hazaribagh","Azimpur","Shahjadpur","Vatara","Kuril","Nadda"];
+const RE_ADDR_TOKEN = /\b(house|holding|plot|flat|road|block|sector|level|floor|suite|lane|avenue|tower|bhaban|bhavan|villa|complex|plaza|market|bazar|bazaar|para|nagar)\b/i;
+
+function nearestName(lower, list, cueIdx) {
+  let best = "", bestD = 1e15;
+  for (const name of list) {
+    const i = lower.indexOf(name.toLowerCase());
+    if (i < 0) continue;
+    const d = cueIdx >= 0 ? Math.abs(i - cueIdx) : i;
+    if (d < bestD) { bestD = d; best = name; }
+  }
+  return best;
+}
+function extractContact(html, text) {
+  const out = { phone: "", email: "", address: "", district: "", area: "" };
+  const t = (text || "").slice(0, 60000);
+  const pm = t.match(/(?:\+?880[\s-]?|0)1[3-9]\d{8}/);
+  if (pm) out.phone = pm[0].replace(/[\s-]/g, "");
+  const em = ((html || "").match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i) || [])[0];
+  if (em && !/(example|sentry|wixpress|godaddy|\.png|\.jpg|domain\.com|email\.com|yourdomain|wordpress)/i.test(em)) out.email = em.toLowerCase();
+  // A REAL address = a window that has an address token (House/Road/Block/Sector/…) AND a BD
+  // district/area near it. This skips nav menus ("Contact", "About") and incidental place names.
+  const addrRe = /(house|holding|plot|flat|road|block|sector|level|floor|suite|lane|avenue|tower|bhaban|bhavan|plaza|complex|রোড|সড়ক|বাড়ি|ব্লক|সেক্টর)/gi;
+  let m, scanned = 0;
+  while ((m = addrRe.exec(t)) && scanned++ < 200) {
+    const win = t.slice(Math.max(0, m.index - 45), m.index + 155);
+    const wl = win.toLowerCase();
+    let area = "", dist = "";
+    const wb = (name) => new RegExp("\\b" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "i").test(win);
+    for (const a of BD_AREAS) { if (wb(a)) { area = a; break; } }
+    for (const d of BD_DISTRICTS) { if (wb(d)) { dist = d; break; } }
+    if (area || dist) {
+      out.address = win.replace(/\s+/g, " ").replace(/^[^A-Za-zঀ-৿]+/, "").trim().slice(0, 160);
+      out.area = area;
+      out.district = dist || (area ? "Dhaka" : "");
+      break;
+    }
+  }
+  return out;
+}
+
 // ---- Bayesian fusion (port of score.py, ported-layer subset) ----
 const PRIOR = 0.12;
 const W = {
@@ -287,6 +330,8 @@ export async function scanDomain(env, rec) {
   sc.httpStatus = B.status;
   sc.isBd = S.bdSignal(reg, visB) ? 1 : 0;
   sc.bizType = S.bizType(reg, ttl, visB);
+  const _ct = extractContact(B.text, visB);
+  sc.address = _ct.address; sc.district = _ct.district; sc.area = _ct.area; sc.contactPhone = _ct.phone; sc.email = _ct.email;
   return sc;
 }
 
@@ -399,7 +444,7 @@ export async function scanSlice(env, n) {
         biz = v.business_type || biz; verdict = "ai-" + v.classification; reason = "ai:" + v.classification + " — " + v.reason;
       } else if (sc.status === "spam_site") continue;
     } else if (sc.status === "spam_site") continue;
-    findings.push({ domain: r.domain, business: r.business, phone: r.phone, category: sc.category, layers: sc.layers.join(","), proof: sc.proof, proofUrl: sc.proofUrl, httpStatus: sc.httpStatus, nbuckets: sc.nbuckets, verdict, reason, confirmed, evidence: sc.evidence, isBd: sc.isBd, bizType: biz, status });
+    findings.push({ domain: r.domain, business: r.business, phone: r.phone || sc.contactPhone, category: sc.category, layers: sc.layers.join(","), proof: sc.proof, proofUrl: sc.proofUrl, httpStatus: sc.httpStatus, nbuckets: sc.nbuckets, verdict, reason, confirmed, evidence: sc.evidence, isBd: sc.isBd, bizType: biz, status, address: sc.address, district: sc.district });
   }
   return { rowids, findings, scanned: rows.length, errors };
 }
@@ -423,8 +468,8 @@ export async function ingestResults(env, agg) {
     if (conf) { confirmed++; if (catc[f.category] !== undefined) catc[f.category]++; }
     stmts.push(env.DB.prepare("DELETE FROM findings WHERE domain=?").bind(f.domain));
     stmts.push(env.DB.prepare(
-      "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage1_score,stage2_verdict,stage2_reason,stage2_category,confirmed,pass_no,first_ts,ts,evidence,is_bd,biz_type,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).bind(f.domain, (f.business || "").slice(0, 200), (f.phone || "").slice(0, 40), f.category, (f.layers || "").slice(0, 200), (f.proof || "").slice(0, 600), (f.proofUrl || "").slice(0, 300), f.httpStatus || 0, f.nbuckets || 0, (f.verdict || "").slice(0, 20), (f.reason || "").slice(0, 400), f.category, conf, 1, now, now, JSON.stringify(f.evidence || []).slice(0, 4000), f.isBd ? 1 : 0, (f.bizType || "").slice(0, 30), (f.status || "lead").slice(0, 16)));
+      "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage1_score,stage2_verdict,stage2_reason,stage2_category,confirmed,pass_no,first_ts,ts,evidence,is_bd,biz_type,status,address,district) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).bind(f.domain, (f.business || "").slice(0, 200), (f.phone || "").slice(0, 40), f.category, (f.layers || "").slice(0, 200), (f.proof || "").slice(0, 600), (f.proofUrl || "").slice(0, 300), f.httpStatus || 0, f.nbuckets || 0, (f.verdict || "").slice(0, 20), (f.reason || "").slice(0, 400), f.category, conf, 1, now, now, JSON.stringify(f.evidence || []).slice(0, 4000), f.isBd ? 1 : 0, (f.bizType || "").slice(0, 30), (f.status || "lead").slice(0, 16), (f.address || "").slice(0, 200), (f.district || "").slice(0, 40)));
     if (conf) stmts.push(env.DB.prepare("INSERT INTO events (kind,domain,detail,ts) VALUES ('confirmed',?,?,?)").bind(f.domain, (f.category + " | " + (f.proof || "")).slice(0, 200), now));
   }
   const day = dDay(now), hour = dHour(now);
@@ -467,6 +512,15 @@ export async function scanOneVerified(env, domain) {
     domain, flagged: sc.flagged ? 1 : 0, confirmed: confirmed ? 1 : 0, category: sc.category || "",
     verdict, reason, proof: sc.proof || "", proofUrl: sc.proofUrl || "", layers: (sc.layers || []).join(","),
     title: sc.title || "", httpStatus: sc.httpStatus || 0, isBd: sc.isBd ? 1 : 0, bizType: biz || "",
-    status, evidence: sc.evidence || [],
+    status, evidence: sc.evidence || [], address: sc.address || "", district: sc.district || "", phone: sc.contactPhone || "",
   };
+}
+
+// fetchContact — one cheap homepage fetch + regex contact/address extraction (zero LLM).
+// Used to back-fill address/district on already-confirmed leads.
+export async function fetchContact(domain) {
+  const base = "https://" + String(domain || "").trim().toLowerCase().replace(/^www\./, "");
+  const B = await fetchPage(base, UA_BR, null, 9000);
+  if (B.status === 0 || !B.text) return null;
+  return extractContact(B.text, stripHtml(B.text));
 }

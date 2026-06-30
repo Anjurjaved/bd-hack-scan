@@ -1,4 +1,4 @@
-import { scanTick, scanDomain, scanSlice, ingestResults, scanOneVerified } from "./scan.js";
+import { scanTick, scanDomain, scanSlice, ingestResults, scanOneVerified, fetchContact } from "./scan.js";
 import { harvestReverseIp, harvestCrtsh, harvestDirectories, harvestCommonCrawl, harvestLeadCoip, harvestBdIpSweep } from "./harvest.js";
 
 /**
@@ -103,6 +103,7 @@ export default {
           if (body.source === "directories") return json({ ok: true, ...(await harvestDirectories(env)) });
           if (body.source === "leadcoip") return json({ ok: true, ...(await harvestLeadCoip(env)) });
           if (body.source === "bdipsweep") return json({ ok: true, ...(await harvestBdIpSweep(env)) });
+          if (body.source === "addr") return json({ ok: true, ...(await backfillAddresses(env)) });
           return json({ ok: true, ...(await harvestCommonCrawl(env)) });
         }
         if (path === "/heartbeat") return await heartbeat(env, body);
@@ -116,7 +117,7 @@ export default {
 
   async scheduled(event, env, ctx) {
     const c = event.cron;
-    if (c === "*/15 * * * *") ctx.waitUntil(housekeeping(env).then(() => harvestLeadCoip(env)).catch(() => {}));  // housekeeping + 24/7 shared-IP lead multiplier
+    if (c === "*/15 * * * *") ctx.waitUntil(housekeeping(env).then(() => harvestLeadCoip(env)).then(() => backfillAddresses(env)).catch(() => {}));  // housekeeping + shared-IP multiplier + address back-fill
     else if (c === "*/20 * * * *") ctx.waitUntil(Promise.allSettled([harvestCommonCrawl(env), harvestReverseIp(env)]));  // Common Crawl + reverse-IP snowball (co-hosted BD businesses)
     else if (c === "37 */2 * * *") ctx.waitUntil(harvestDirectories(env).catch(() => {}));   // BD business directories (.com sites)
     else if (c === "13 */6 * * *") ctx.waitUntil(Promise.allSettled([harvestCrtsh(env), harvestBdIpSweep(env)]));        // crt.sh .bd identities + BD IP-space sweep
@@ -395,7 +396,7 @@ async function apiLeads(env, url) {
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10) || 200, 5000);
   const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
   const manual = url.searchParams.get("manual") === "1";
-  let sql = "SELECT id,domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,ts,evidence,is_bd,biz_type,status,ip,is_manual,mbatch FROM findings WHERE status != 'rejected'";
+  let sql = "SELECT id,domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,ts,evidence,is_bd,biz_type,status,ip,is_manual,mbatch,address,district FROM findings WHERE status != 'rejected'";
   const binds = [];
   if (manual) {
     sql += " AND is_manual=1";
@@ -431,11 +432,33 @@ async function scanManual(env, body) {
     out.push({ domain: dom, hacked: r.confirmed, flagged: r.flagged, category: r.category, verdict: r.verdict, reason: r.reason, proofUrl: r.proofUrl, proof: r.proof, status: r.status, isBd: r.isBd });
     stmts.push(env.DB.prepare("DELETE FROM findings WHERE domain=? AND is_manual=1").bind(dom));
     stmts.push(env.DB.prepare(
-      "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,pass_no,first_ts,ts,evidence,is_bd,biz_type,status,is_manual,mbatch) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).bind(dom, "", "", r.category, (r.layers || "").slice(0, 200), (r.proof || "").slice(0, 600), (r.proofUrl || "").slice(0, 300), r.httpStatus || 0, (r.verdict || "").slice(0, 20), (r.reason || "").slice(0, 400), r.confirmed ? 1 : 0, 1, now, now, JSON.stringify(r.evidence || []).slice(0, 4000), r.isBd ? 1 : 0, (r.bizType || "").slice(0, 30), (r.status || "manual").slice(0, 16), 1, name));
+      "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,pass_no,first_ts,ts,evidence,is_bd,biz_type,status,is_manual,mbatch,address,district) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).bind(dom, "", (r.phone || "").slice(0, 40), r.category, (r.layers || "").slice(0, 200), (r.proof || "").slice(0, 600), (r.proofUrl || "").slice(0, 300), r.httpStatus || 0, (r.verdict || "").slice(0, 20), (r.reason || "").slice(0, 400), r.confirmed ? 1 : 0, 1, now, now, JSON.stringify(r.evidence || []).slice(0, 4000), r.isBd ? 1 : 0, (r.bizType || "").slice(0, 30), (r.status || "manual").slice(0, 16), 1, name, (r.address || "").slice(0, 200), (r.district || "").slice(0, 40)));
   }
   if (stmts.length) await env.DB.batch(stmts);
   return json({ ok: true, scanned: out.length, results: out });
+}
+
+// Back-fill address/district on already-confirmed leads (one cheap homepage fetch + regex, ZERO
+// Gemini). Bounded per run + '-' sentinel so each lead is tried once; runs on the */15 cron.
+async function backfillAddresses(env) {
+  const N = Number(env.ADDR_BACKFILL || 8);
+  const rows = (await env.DB.prepare(
+    "SELECT domain FROM findings WHERE confirmed=1 AND status!='rejected' AND (address IS NULL OR address='') AND (district IS NULL OR district='') ORDER BY id LIMIT ?"
+  ).bind(N).all()).results || [];
+  if (!rows.length) return { tried: 0, backfilled: 0 };
+  const stmts = [];
+  let got = 0;
+  for (const r of rows) {
+    let c; try { c = await fetchContact(r.domain); } catch (e) { c = null; }
+    const addr = (c && c.address) || "", dist = (c && c.district) || "", ph = (c && c.phone) || "";
+    if (addr || dist) got++;
+    stmts.push(env.DB.prepare(
+      "UPDATE findings SET address=?, district=?, phone=CASE WHEN (phone IS NULL OR phone='') THEN ? ELSE phone END WHERE domain=? AND confirmed=1"
+    ).bind(addr || "-", dist || "-", ph, r.domain));
+  }
+  if (stmts.length) await env.DB.batch(stmts);
+  return { tried: rows.length, backfilled: got };
 }
 
 // Bulk-store the hosting IP of confirmed leads (from the lead-coip harvester / worker cron).
