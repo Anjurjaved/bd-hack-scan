@@ -84,6 +84,7 @@ export default {
         if (!authed(request, env)) return bad("unauthorized", 401);
         const body = await request.json().catch(() => ({}));
         if (path === "/harvest") return await harvest(env, body);
+        if (path === "/lead-ips") return await storeLeadIps(env, body);
         if (path === "/build") return json({ ok: true, built: await buildBatches(env, 200) });
         if (path === "/cursor") return await cursorEndpoint(env, body);
         if (path === "/claim") return await claim(env, body);
@@ -387,7 +388,7 @@ async function apiLeads(env, url) {
   const onlyConfirmed = url.searchParams.get("confirmed") !== "0";
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10) || 200, 1000);
   const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
-  let sql = "SELECT id,domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,ts,evidence,is_bd,biz_type,status FROM findings WHERE status != 'rejected'";
+  let sql = "SELECT id,domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage2_verdict,stage2_reason,confirmed,ts,evidence,is_bd,biz_type,status,ip FROM findings WHERE status != 'rejected'";
   const binds = [];
   if (onlyConfirmed) sql += " AND confirmed=1";
   if (region === "bd") sql += " AND is_bd=1";
@@ -398,6 +399,26 @@ async function apiLeads(env, url) {
   binds.push(limit, offset);
   const rs = await env.DB.prepare(sql).bind(...binds).all();
   return json({ ok: true, leads: rs.results || [], limit, offset });
+}
+
+// Bulk-store the hosting IP of confirmed leads (from the lead-coip harvester / worker cron).
+// Powers the dashboard's shared-server ("area") clustering. body: { pairs: [{domain, ip}] }
+async function storeLeadIps(env, body) {
+  const pairs = Array.isArray(body.pairs) ? body.pairs : [];
+  if (!pairs.length) return json({ ok: true, updated: 0 });
+  const stmts = [];
+  for (const p of pairs.slice(0, 3000)) {
+    const dom = normalizeDomain(p.domain);
+    const ip = String(p.ip || "").trim().slice(0, 45);
+    if (!dom || !ip || !/^[0-9a-fA-F:.]+$/.test(ip)) continue;
+    stmts.push(env.DB.prepare("UPDATE findings SET ip=? WHERE domain=?").bind(ip, dom));
+  }
+  let updated = 0;
+  for (let i = 0; i < stmts.length; i += 50) {
+    const res = await env.DB.batch(stmts.slice(i, i + 50));
+    for (const r of res) updated += (r.meta && r.meta.changes) || 0;
+  }
+  return json({ ok: true, updated });
 }
 
 // Public (the dashboard's "not a lead" button) — toggles a finding's status.

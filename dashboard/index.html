@@ -100,6 +100,23 @@
   .expbar .btn.x-xls{background:#e7f7ef;color:#0f9d6a;border-color:#bfe8d4}
   .expbar .btn.x-pdf{background:#fdeaec;color:#c0263a;border-color:#f4c8cf}
   .expbar .hint{font-size:11px;color:var(--muted);margin-left:auto;font-family:var(--fb)}
+  /* ---- view / cluster toggle ---- */
+  .viewbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:9px 15px;border-top:1px solid var(--line)}
+  .viewbar .lab{font-size:11.5px;color:var(--muted);font-weight:700}
+  .vbtn{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+  .vbtn svg{width:14px;height:14px} .vbtn.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .viewbar .hint{font-size:11px;color:var(--muted);margin-left:auto;font-family:var(--fb)}
+  /* ---- server clusters ---- */
+  #clusters{padding:4px 0 8px}
+  .cluster{border:1px solid var(--line);border-radius:13px;margin:0 15px 12px;overflow:hidden;background:var(--panel);box-shadow:var(--sh)}
+  .cluster .ch{display:flex;align-items:center;gap:9px;padding:10px 13px;background:var(--panel2);border-bottom:1px solid var(--line);font-size:12.5px;flex-wrap:wrap}
+  .cluster .ch .ip{font-family:var(--fm);font-weight:800;font-size:13px}
+  .cluster .ch .meta{color:var(--muted);font-size:11px}
+  .cluster .ch .cnt{margin-left:auto;background:var(--red);color:#fff;border-radius:999px;font-size:10px;font-weight:800;padding:2px 10px;font-family:var(--fb)}
+  .cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:7px;padding:11px 13px}
+  .cdom{display:flex;align-items:center;gap:8px;justify-content:space-between;border:1px solid var(--line);border-radius:9px;padding:7px 10px;cursor:pointer;font-size:12px;background:var(--panel)}
+  .cdom:hover{background:var(--panel2)} .cdom .d{font-family:var(--fm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  @media(max-width:640px){.cluster{margin:0 0 11px}.cgrid{grid-template-columns:1fr}}
   .modal .mbody{flex:1 1 auto;min-height:0}
   /* ---- responsive: phones & small tablets ---- */
   @media(max-width:640px){
@@ -199,7 +216,14 @@
         <span class="btn x-pdf" onclick="exportLeads('pdf')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><rect x="6" y="14" width="12" height="8"/><path d="M6 18H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/></svg> PDF</span>
         <span class="hint" id="expHint"></span>
       </div>
-      <div class="scroll"><table id="leads"><thead><tr><th>domain</th><th>business</th><th>type</th><th>category</th><th>আক্রান্ত</th><th>phone</th><th>when</th></tr></thead><tbody></tbody></table></div>
+      <div class="viewbar">
+        <span class="lab">দেখুন:</span>
+        <span class="vbtn on" data-g="" onclick="setGroup('')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg> তালিকা</span>
+        <span class="vbtn" data-g="ip" onclick="setGroup('ip')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg> server cluster (একই IP)</span>
+        <span class="hint" id="clHint"></span>
+      </div>
+      <div class="scroll" id="leadTableWrap"><table id="leads"><thead><tr><th>domain</th><th>business</th><th>type</th><th>category</th><th>আক্রান্ত</th><th>phone</th><th>when</th></tr></thead><tbody></tbody></table></div>
+      <div id="clusters" style="display:none"></div>
     </div>
   </div>
 
@@ -260,7 +284,7 @@ const SRC_INFO={
   'bulk-bd-extract':{d:'১০.৪M bulk থেকে বের করা registrable .bd domain',k:'bd'},
 };
 const KIND={bd:{t:'বাংলাদেশ',c:'#10b981'},global:{t:'global',c:'#5b7088'},mixed:{t:'mixed',c:'#e7a700'}};
-let LEADS=[], curCat="", curRegion="bd", curBiz="", STATS={};
+let LEADS=[], curCat="", curRegion="bd", curBiz="", curGroup="", STATS={};
 
 // ---- tabs ----
 document.getElementById('tabs').onclick=e=>{const t=e.target.closest('.tab');if(!t)return;
@@ -350,7 +374,31 @@ function renderLeads(){
     let ev=[];try{ev=JSON.parse(l.evidence||"[]")}catch(e){}
     const np=ev.length||(l.proof_url?1:0);
     return `<tr class="lead-row" onclick="openLead(${LEADS.indexOf(l)})"><td data-label="domain"><span class="mono">${esc(l.domain)}</span></td><td data-label="business">${esc(l.business)||'—'}</td><td data-label="type">${l.biz_type?`<span class="tag" style="background:#eef2f9;color:#456a8a">${esc(l.biz_type)}</span>`:'—'}</td><td data-label="category"><span class="tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></td><td class="proof" data-label="আক্রান্ত">${bn(np)} পেজ</td><td class="mono" data-label="phone">${esc(l.phone)||'—'}</td><td data-label="when">${ago(l.ts)}</td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">কোনো lead নেই</td></tr>';
+  if(curGroup==='ip')renderClusters(rows);
   document.getElementById('leadHint').textContent=bn(rows.length)+" lead";
+}
+function setGroup(g){
+  curGroup=g;
+  document.querySelectorAll('.vbtn').forEach(b=>b.classList.toggle('on',b.dataset.g===g));
+  document.getElementById('leadTableWrap').style.display=(g==='ip')?'none':'';
+  document.getElementById('clusters').style.display=(g==='ip')?'block':'none';
+  renderLeads();
+}
+function renderClusters(rows){
+  const box=document.getElementById('clusters');
+  const groups={};
+  rows.forEach(l=>{const ip=l.ip||'__none';(groups[ip]=groups[ip]||[]).push(l);});
+  const keys=Object.keys(groups).sort((a,b)=>{if(a==='__none')return 1;if(b==='__none')return -1;return groups[b].length-groups[a].length;});
+  const withIp=rows.filter(l=>l.ip).length, servers=keys.filter(k=>k!=='__none').length;
+  document.getElementById('clHint').textContent=bn(servers)+" server · "+bn(withIp)+"/"+bn(rows.length)+" IP জানা";
+  box.innerHTML=keys.length?keys.map(ip=>{
+    const g=groups[ip], named=ip!=='__none';
+    const head=named
+      ? `<span class="ip">${esc(ip)}</span><span class="meta">এই shared server-এ <b>${bn(g.length)}</b>টি hacked site</span>`
+      : `<span class="ip" style="color:var(--muted)">IP এখনো জানা যায়নি</span><span class="meta">পরের harvest-এ যোগ হবে</span>`;
+    const items=g.map(l=>`<div class="cdom" onclick="openLead(${LEADS.indexOf(l)})"><span class="d">${esc(l.domain)}</span><span class="tag t-${l.category}" style="flex:0 0 auto">${CAT[l.category]||l.category||'?'}</span></div>`).join('');
+    return `<div class="cluster"><div class="ch">${head}<span class="cnt">${bn(g.length)}</span></div><div class="cgrid">${items}</div></div>`;
+  }).join(''):'<div class="empty">এই filter-এ cluster নেই</div>';
 }
 
 // ---- export (TXT / Excel / organized PDF) ----

@@ -87,6 +87,22 @@ def fetch_leads(region: str, limit: int):
         return []
 
 
+def post_lead_ips(pairs):
+    """Store lead -> hosting IP on the Worker (powers the dashboard's shared-server clusters)."""
+    import urllib.request
+    if not pairs:
+        return 0
+    body = json.dumps({"pairs": pairs}).encode()
+    req = urllib.request.Request(API + "/lead-ips", body,
+                                 {"authorization": "Bearer " + token(), "content-type": "application/json", "user-agent": UA})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return int(json.loads(r.read()).get("updated", 0) or 0)
+    except Exception as e:
+        print(f"[lead-coip] lead-ips post failed: {e}", file=sys.stderr)
+        return 0
+
+
 def resolve_ip(domain: str):
     try:
         ip = socket.gethostbyname(domain)
@@ -157,6 +173,11 @@ def main() -> int:
             continue
         ip_leads.setdefault(ip, []).append(d)
     print(f"[lead-coip] {len(ip_leads)} distinct hosting IPs ({cdn} behind CDN/unresolved, skipped)", file=sys.stderr)
+
+    # store lead -> IP so the dashboard can cluster leads by shared server ("area")
+    pairs = [{"domain": d, "ip": ip} for ip, ds in ip_leads.items() for d in ds]
+    if pairs:
+        print(f"[lead-coip] stored IP for {post_lead_ips(pairs)} leads (cluster data)", file=sys.stderr)
 
     # rank hotspots: IPs carrying the MOST confirmed leads first (densest infections)
     st = load_state()
