@@ -92,6 +92,53 @@
   .pitch{white-space:pre-wrap;font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:12px;margin-top:8px;line-height:1.65;max-height:230px;overflow:auto}
   footer{margin-top:24px;text-align:center;color:var(--muted);font-size:11px} footer a{font-weight:600}
   @media(max-width:560px){.kv{grid-template-columns:1fr}}
+  /* ---- export bar ---- */
+  .expbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:9px 15px;border-top:1px solid var(--line);background:var(--panel2)}
+  .expbar .lab{font-size:11.5px;color:var(--muted);font-weight:700}
+  .expbar .btn{padding:6px 12px;font-size:11.5px}
+  .expbar .btn.x-txt{background:#eef2f9;color:#456a8a;border-color:#dbe5f0}
+  .expbar .btn.x-xls{background:#e7f7ef;color:#0f9d6a;border-color:#bfe8d4}
+  .expbar .btn.x-pdf{background:#fdeaec;color:#c0263a;border-color:#f4c8cf}
+  .expbar .hint{font-size:11px;color:var(--muted);margin-left:auto;font-family:var(--fb)}
+  .modal .mbody{flex:1 1 auto;min-height:0}
+  /* ---- responsive: phones & small tablets ---- */
+  @media(max-width:640px){
+    .wrap{padding:10px 10px 56px}
+    header{gap:9px} .logo h1{font-size:15px} .logo p{font-size:10px}
+    .live{margin-left:0;width:100%} .pill{padding:5px 10px;font-size:11px}
+    .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:2px;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none} .tab{white-space:nowrap;padding:9px 11px}
+    .cards{grid-template-columns:repeat(2,1fr);gap:10px} .card{padding:12px 13px} .card .val{font-size:22px}
+    .card .ic{display:none}
+    svg.chart{height:150px}
+    .toolbar{padding:10px 12px} .toolbar input{min-width:100%;order:-1}
+    .scroll{max-height:none}
+    /* leads table -> stacked cards */
+    #leads thead{display:none}
+    #leads,#leads tbody,#leads tr,#leads td{display:block;width:100%}
+    #leads tr{border:1px solid var(--line);border-radius:13px;margin:0 0 10px;padding:7px 2px;background:var(--panel);box-shadow:var(--sh)}
+    #leads tr:hover{background:var(--panel)}
+    #leads td{border:none;padding:5px 13px;display:flex;justify-content:space-between;align-items:center;gap:14px;text-align:right;white-space:normal}
+    #leads td::before{content:attr(data-label);color:var(--muted);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.3px;text-align:left;flex:0 0 auto}
+    #leads td.proof{max-width:none}
+    #leads td:first-child{border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:2px}
+    /* tables that stay tabular -> horizontal scroll */
+    #sources,#workers{min-width:560px}
+    .panel h2{font-size:12.5px;padding:11px 13px} .panel h2 small{font-size:10px}
+    /* modal fills the screen on phones, body scrolls cleanly */
+    .modal-bg{padding:0;align-items:stretch}
+    .modal{width:100%;max-width:100%;height:100dvh;max-height:100dvh;border-radius:0}
+    .modal .mh{position:sticky;top:0;background:var(--panel);z-index:2}
+    .out .btn{flex:1 1 46%;justify-content:center}
+    .pitch{max-height:none}
+  }
+  @media(max-width:380px){ .cards{grid-template-columns:1fr} .out .btn{flex:1 1 100%} }
+  /* ---- print / organized PDF ---- */
+  @media print{
+    body{background:#fff} .tabs,.toolbar,.expbar,.live,.bizFilter,#bizFilter,footer .live,.modal-bg{display:none!important}
+    .wrap{max-width:100%;padding:0} .panel{box-shadow:none;border:none}
+    th{position:static}
+  }
 </style>
 </head>
 <body>
@@ -145,6 +192,13 @@
         <span class="chip" data-c="redirect" onclick="setCat(this)">redirect</span>
       </div>
       <div class="filters" id="bizFilter" style="padding:0 15px 11px;display:flex;gap:7px;flex-wrap:wrap"></div>
+      <div class="expbar">
+        <span class="lab">Export:</span>
+        <span class="btn x-txt" onclick="exportLeads('txt')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> TXT</span>
+        <span class="btn x-xls" onclick="exportLeads('xlsx')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 8l8 8M16 8l-8 8"/></svg> Excel</span>
+        <span class="btn x-pdf" onclick="exportLeads('pdf')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><rect x="6" y="14" width="12" height="8"/><path d="M6 18H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/></svg> PDF</span>
+        <span class="hint" id="expHint"></span>
+      </div>
       <div class="scroll"><table id="leads"><thead><tr><th>domain</th><th>business</th><th>type</th><th>category</th><th>আক্রান্ত</th><th>phone</th><th>when</th></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
@@ -184,6 +238,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 <script src="config.js"></script>
 <script>
 const API=(window.API_BASE||"").replace(/\/$/,"");
@@ -290,12 +345,65 @@ function renderLeads(){
   const q=(document.getElementById('leadSearch').value||"").toLowerCase();
   document.getElementById('regionLabel').textContent=curRegion==='bd'?'বাংলাদেশি':'International';
   renderBizChips();
-  let rows=LEADS.filter(l=>(curRegion==='bd'?l.is_bd:!l.is_bd)&&(!curCat||l.category===curCat)&&(!curBiz||l.biz_type===curBiz)&&(!q||(l.domain||"").toLowerCase().includes(q)||(l.business||"").toLowerCase().includes(q)));
+  let rows=currentRows();
   document.querySelector('#leads tbody').innerHTML=rows.length?rows.map(l=>{
     let ev=[];try{ev=JSON.parse(l.evidence||"[]")}catch(e){}
     const np=ev.length||(l.proof_url?1:0);
-    return `<tr class="lead-row" onclick="openLead(${LEADS.indexOf(l)})"><td><span class="mono">${esc(l.domain)}</span></td><td>${esc(l.business)||'—'}</td><td>${l.biz_type?`<span class="tag" style="background:#eef2f9;color:#456a8a">${esc(l.biz_type)}</span>`:'—'}</td><td><span class="tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></td><td class="proof">${bn(np)} পেজ</td><td class="mono">${esc(l.phone)||'—'}</td><td>${ago(l.ts)}</td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">কোনো lead নেই</td></tr>';
+    return `<tr class="lead-row" onclick="openLead(${LEADS.indexOf(l)})"><td data-label="domain"><span class="mono">${esc(l.domain)}</span></td><td data-label="business">${esc(l.business)||'—'}</td><td data-label="type">${l.biz_type?`<span class="tag" style="background:#eef2f9;color:#456a8a">${esc(l.biz_type)}</span>`:'—'}</td><td data-label="category"><span class="tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></td><td class="proof" data-label="আক্রান্ত">${bn(np)} পেজ</td><td class="mono" data-label="phone">${esc(l.phone)||'—'}</td><td data-label="when">${ago(l.ts)}</td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">কোনো lead নেই</td></tr>';
   document.getElementById('leadHint').textContent=bn(rows.length)+" lead";
+}
+
+// ---- export (TXT / Excel / organized PDF) ----
+function currentRows(){
+  const q=(document.getElementById('leadSearch').value||"").toLowerCase();
+  return LEADS.filter(l=>(curRegion==='bd'?l.is_bd:!l.is_bd)&&(!curCat||l.category===curCat)&&(!curBiz||l.biz_type===curBiz)&&(!q||(l.domain||"").toLowerCase().includes(q)||(l.business||"").toLowerCase().includes(q)));
+}
+function fileStamp(){return new Date().toISOString().slice(0,10);}
+function dl(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);}
+function expRows(){return currentRows().map(l=>({Domain:l.domain||'',Business:l.business||'',Type:l.biz_type||'',Hack:l.category||'',Phone:l.phone||'',Proof:(l.proof_snippet||'').slice(0,300),ProofURL:l.proof_url||'',Verdict:l.stage2_reason||'',Region:l.is_bd?'BD':'INTL',Scanned:l.ts?new Date(l.ts*1000).toISOString().slice(0,10):''}));}
+function exportLeads(fmt){
+  const rows=expRows();
+  if(!rows.length){alert('এই filter-এ export করার মতো lead নেই');return;}
+  const base=(curRegion==='bd'?'bd':'intl')+'-hack-leads-'+fileStamp();
+  if(fmt==='txt'){
+    const head=`BD Hack-Audit — ${rows.length} ${curRegion==='bd'?'Bangladesh':'International'} confirmed-hacked sites — ${fileStamp()}\nPrepared by Javed IT Solution\n${'='.repeat(64)}\n\n`;
+    const body=rows.map((r,i)=>`${i+1}. ${r.Domain}   [${r.Hack}]\n   business : ${r.Business||'-'}   |  type: ${r.Type||'-'}   |  phone: ${r.Phone||'-'}\n   proof    : ${r.Proof||'-'}\n   evidence : ${r.ProofURL||'-'}\n`).join('\n');
+    dl(base+'.txt',new Blob([head+body],{type:'text/plain;charset=utf-8'}));
+  } else if(fmt==='xlsx'){
+    if(typeof XLSX==='undefined'){alert('Excel module এখনো লোড হচ্ছে — ২-৩ সেকেন্ড পর আবার চাপুন');return;}
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws['!cols']=[{wch:26},{wch:28},{wch:14},{wch:12},{wch:18},{wch:44},{wch:46},{wch:34},{wch:8},{wch:12}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Leads');
+    XLSX.writeFile(wb,base+'.xlsx');
+  } else if(fmt==='pdf'){ exportPDF(rows); }
+  const h=document.getElementById('expHint');if(h)h.textContent=bn(rows.length)+' lead → '+fmt.toUpperCase();
+}
+function exportPDF(rows){
+  const groups={};rows.forEach(r=>{(groups[r.Hack||'other']=groups[r.Hack||'other']||[]).push(r);});
+  const date=fileStamp();
+  let body=`<h1>BD Hack-Audit — Confirmed Compromised Websites</h1>`
+    +`<div class="meta">${curRegion==='bd'?'Bangladesh':'International'} leads &middot; ${rows.length} sites &middot; ${date} &middot; Prepared by Javed IT Solution</div>`;
+  Object.keys(groups).sort((a,b)=>groups[b].length-groups[a].length).forEach(cat=>{
+    const g=groups[cat];
+    body+=`<h2>${String(cat).toUpperCase()} &mdash; ${g.length}</h2>`
+      +`<table><thead><tr><th>#</th><th>Domain</th><th>Business</th><th>Type</th><th>Phone</th><th>Live evidence URL</th></tr></thead><tbody>`;
+    g.forEach((r,i)=>{const e=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      body+=`<tr><td>${i+1}</td><td>${e(r.Domain)}</td><td>${e(r.Business)||'&mdash;'}</td><td>${e(r.Type)||'&mdash;'}</td><td>${e(r.Phone)||'&mdash;'}</td><td>${e(r.ProofURL||r.Proof)||'&mdash;'}</td></tr>`;});
+    body+=`</tbody></table>`;
+  });
+  const css=`<style>*{font-family:Arial,Helvetica,sans-serif;color:#0f2740;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    h1{font-size:18px;margin:0 0 4px}.meta{font-size:11px;color:#5b7088;margin-bottom:16px}
+    h2{font-size:13px;margin:18px 0 6px;color:#c0263a;border-bottom:2px solid #eee;padding-bottom:3px}
+    table{width:100%;border-collapse:collapse;font-size:9.5px;margin-bottom:8px}
+    th,td{border:1px solid #ddd;padding:4px 6px;text-align:left;vertical-align:top;word-break:break-word}
+    th{background:#f2f5f9;font-size:8.5px;text-transform:uppercase;letter-spacing:.3px}
+    td:nth-child(1){text-align:right;width:24px}td:nth-child(6){color:#1f5bd6}
+    tr{page-break-inside:avoid}@page{size:A4;margin:13mm}</style>`;
+  const w=window.open('','_blank');
+  if(!w){alert('PDF উইন্ডো খুলতে popup allow করুন');return;}
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>BD Hack-Audit leads '+date+'</title>'+css+'</head><body>'+body+'</body></html>');
+  w.document.close();
+  setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
 }
 
 // ---- outreach ----

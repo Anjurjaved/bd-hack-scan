@@ -16,3 +16,6 @@ venv/
 
 # harvester runtime state
 harvester/.*_state.json
+
+# local dashboard backups
+_backups/
