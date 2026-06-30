@@ -117,6 +117,19 @@
   .cdom{display:flex;align-items:center;gap:8px;justify-content:space-between;border:1px solid var(--line);border-radius:9px;padding:7px 10px;cursor:pointer;font-size:12px;background:var(--panel)}
   .cdom:hover{background:var(--panel2)} .cdom .d{font-family:var(--fm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   @media(max-width:640px){.cluster{margin:0 0 11px}.cgrid{grid-template-columns:1fr}}
+  /* ---- screenshots gallery ---- */
+  .shotbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:11px 15px;border-bottom:1px solid var(--line)}
+  .shotgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(244px,1fr));gap:13px;padding:14px 15px}
+  .shotcard{border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--panel);box-shadow:var(--sh);cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}
+  .shotcard:hover{transform:translateY(-3px);box-shadow:0 12px 32px rgba(16,39,64,.15)}
+  .shotimg{position:relative;width:100%;aspect-ratio:16/10;background:linear-gradient(135deg,#eef2f7,#dbe5f0);overflow:hidden}
+  .shotimg img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+  .shotimg .ld{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:11px;text-align:center;padding:8px}
+  .shotimg .cat{position:absolute;left:8px;top:8px;z-index:2}
+  .shotmeta{padding:9px 11px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .shotmeta .d{font-family:var(--fm);font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .modal .mshot{width:100%;border-radius:11px;border:1px solid var(--line);margin-bottom:13px;display:block;aspect-ratio:16/9;object-fit:cover;object-position:top center;background:var(--panel2)}
+  @media(max-width:640px){.shotgrid{grid-template-columns:repeat(2,1fr);gap:9px;padding:11px}.shotcard{border-radius:11px}}
   .modal .mbody{flex:1 1 auto;min-height:0}
   /* ---- responsive: phones & small tablets ---- */
   @media(max-width:640px){
@@ -179,6 +192,7 @@
     <div class="tab" data-v="system"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg> Workers / System</div>
     <div class="tab" data-v="feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Live Feed</div>
     <div class="tab" data-v="manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg> Manual Scan</div>
+    <div class="tab" data-v="shots"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg> আক্রান্ত সাইট <span class="badge" id="shotBadge" style="background:var(--purple)">0</span></div>
   </div>
 
   <!-- OVERVIEW -->
@@ -269,6 +283,31 @@
     </div>
   </div>
 
+  <!-- SCREENSHOTS -->
+  <div class="view" id="v-shots">
+    <div class="panel">
+      <h2>আক্রান্ত সাইটের live screenshot — ক্লিক করলে outreach<small id="shotHint"></small></h2>
+      <div class="shotbar">
+        <span class="lab" style="font-size:11.5px;color:var(--muted);font-weight:700">অঞ্চল:</span>
+        <span class="chip on" data-sr="bd" onclick="setShotRegion(this)">বাংলাদেশি</span>
+        <span class="chip" data-sr="intl" onclick="setShotRegion(this)">International</span>
+        <span class="chip" data-sr="all" onclick="setShotRegion(this)">সব</span>
+      </div>
+      <div class="shotbar" id="shotCatBar">
+        <span class="lab" style="font-size:11.5px;color:var(--muted);font-weight:700">ধরন:</span>
+        <span class="chip on" data-sc="" onclick="setShotCat(this)">সব</span>
+        <span class="chip" data-sc="gambling" onclick="setShotCat(this)">জুয়া</span>
+        <span class="chip" data-sc="malware" onclick="setShotCat(this)">malware</span>
+        <span class="chip" data-sc="deface" onclick="setShotCat(this)">deface</span>
+        <span class="chip" data-sc="pharma" onclick="setShotCat(this)">pharma</span>
+        <span class="chip" data-sc="adult" onclick="setShotCat(this)">adult</span>
+        <span class="chip" data-sc="redirect" onclick="setShotCat(this)">redirect</span>
+        <span class="chip" data-sc="cloak" onclick="setShotCat(this)">cloak</span>
+      </div>
+      <div class="shotgrid" id="shotgrid"></div>
+    </div>
+  </div>
+
   <footer>BD Hack-Audit · 100% free (Cloudflare Workers cron · ৮ parallel shard) · তৈরি করেছে <a href="https://javeditsolution.com" target="_blank" rel="noopener noreferrer">Javed IT Solution</a></footer>
 </div>
 
@@ -312,7 +351,8 @@ document.getElementById('tabs').onclick=e=>{const t=e.target.closest('.tab');if(
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+t.dataset.v));
   if(t.dataset.region){curRegion=t.dataset.region;curBiz="";renderLeads();}
-  if(t.dataset.v==='manual')loadManualStore();};
+  if(t.dataset.v==='manual')loadManualStore();
+  if(t.dataset.v==='shots')renderShots();};
 
 // ---- charts ----
 function lineChart(svg,series,max,colors){const W=800,H=190,P=6;svg.innerHTML="";if(!series[0]||series[0].length<2){svg.innerHTML='<text x="400" y="95" text-anchor="middle" fill="#5b7088" font-size="13" font-family="Inter">data নেই</text>';return;}
@@ -381,7 +421,7 @@ function renderStats(s){
 function setCat(el){curCat=el.dataset.c;el.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===el));renderLeads();}
 function setBiz(t){curBiz=t;renderLeads();}
 function renderBizChips(){const el=document.getElementById('bizFilter');const types=[...new Set(LEADS.filter(l=>curRegion==='bd'?l.is_bd:!l.is_bd).map(l=>l.biz_type).filter(Boolean))].sort();el.innerHTML=`<span class="chip ${!curBiz?'on':''}" onclick="setBiz('')">সব type</span>`+types.map(t=>`<span class="chip ${curBiz===t?'on':''}" onclick="setBiz('${t}')">${esc(t)}</span>`).join('');}
-function updateBadges(){document.getElementById('leadBadge').textContent=bn(LEADS.filter(l=>l.is_bd).length);document.getElementById('intlBadge').textContent=bn(LEADS.filter(l=>!l.is_bd).length);}
+function updateBadges(){document.getElementById('leadBadge').textContent=bn(LEADS.filter(l=>l.is_bd).length);document.getElementById('intlBadge').textContent=bn(LEADS.filter(l=>!l.is_bd).length);const sb=document.getElementById('shotBadge');if(sb)sb.textContent=bn(LEADS.length);}
 async function rejectLead(id){if(!confirm('এই lead সরিয়ে দেবেন? (এটা lead নয় হিসেবে চিহ্নিত হবে)'))return;try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:id,status:'rejected'})});}catch(e){}LEADS=LEADS.filter(l=>l.id!==id);closeModal();updateBadges();renderLeads();}
 async function loadLeads(){
   try{const r=await(await fetch(API+"/api/leads?limit=1000",{cache:'no-store'})).json();LEADS=r.leads||[];
@@ -501,8 +541,9 @@ function pitch(l){
 }
 function emailBody(l){return pitch(l);}
 
-function openLead(idx){
-  const l=LEADS[idx];if(!l)return;
+function openLead(idx){ openLeadObj(LEADS[idx]); }
+function openLeadObj(l){
+  if(!l)return;
   document.getElementById('mDomain').innerHTML=`<a href="https://${esc(l.domain)}" target="_blank" rel="noopener">${esc(l.domain)}</a> <span class="tag t-${l.category}" style="vertical-align:middle">${CAT[l.category]||l.category}</span>`;
   document.getElementById('mBiz').textContent=l.business||'(business নাম অজানা)';
   let ev=[];try{ev=JSON.parse(l.evidence||"[]")}catch(e){}
@@ -510,7 +551,8 @@ function openLead(idx){
   const p=pitch(l), wa=phoneIntl(l.phone);
   const evHtml=ev.length?ev.map(e=>`<div class="ev">${e.layer?`<div class="el">${esc(e.layer)}</div>`:''}<a class="eu" href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.url)}</a>${e.match?`<div class="em">⮞ ${esc(e.match)}</div>`:''}</div>`).join(''):'<div class="empty">এই lead-টি পুরোনো scan — পরের scan-এ বিস্তারিত আক্রান্ত পেজ আসবে। আপাতত প্রমাণ: '+esc(l.proof_snippet||l.proof_url||'')+'</div>';
   document.getElementById('mBody').innerHTML=
-    `<div class="kv"><span class="k">verdict</span><span><b>${esc(l.stage2_verdict||'confirmed')}</b> · ${esc(l.stage2_reason||'')}</span>
+    `<img class="mshot" loading="lazy" src="${shotUrl(l,760)}" onerror="this.style.display='none'" alt="আক্রান্ত পেজের screenshot">
+     <div class="kv"><span class="k">verdict</span><span><b>${esc(l.stage2_verdict||'confirmed')}</b> · ${esc(l.stage2_reason||'')}</span>
       <span class="k">type · region</span><span>${esc(l.biz_type||'—')} · ${l.is_bd?'বাংলাদেশি':'International'}</span>
       <span class="k">layers</span><span class="mono">${esc(l.layers||'')}</span>
       <span class="k">HTTP</span><span>${bn(l.http_status||0)}</span>
@@ -571,21 +613,35 @@ async function runManual(){
   prog.textContent=bn(doms.length)+' ✓ scanned';btn.disabled=false;btn.style.opacity=1;
   loadManualStore();
 }
+let MANUAL=[];
 async function loadManualStore(){
   try{
     const r=await(await fetch(API+'/api/leads?manual=1&confirmed=0&limit=1000',{cache:'no-store'})).json();
-    const ls=r.leads||[],box=document.getElementById('manStore');
-    document.getElementById('manStoreHint').textContent=bn(ls.length)+' manual';
-    if(!ls.length){box.innerHTML='<div class="empty">এখনো সংরক্ষিত manual scan নেই</div>';return;}
-    const groups={};ls.forEach(l=>{const b=l.mbatch||'(নামহীন batch)';(groups[b]=groups[b]||[]).push(l);});
+    MANUAL=r.leads||[];const box=document.getElementById('manStore');
+    document.getElementById('manStoreHint').textContent=bn(MANUAL.length)+' manual';
+    if(!MANUAL.length){box.innerHTML='<div class="empty">এখনো সংরক্ষিত manual scan নেই</div>';return;}
+    const groups={};MANUAL.forEach((l,i)=>{l._i=i;const b=l.mbatch||'(নামহীন batch)';(groups[b]=groups[b]||[]).push(l);});
     box.innerHTML=Object.keys(groups).map(b=>{
       const g=groups[b],hk=g.filter(x=>x.confirmed).length;
-      const items=g.map(l=>`<div style="border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--panel)">
-        <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="mono" style="font-size:11.5px">${esc(l.domain)}</span>${l.confirmed?`<span class="tag t-${l.category}">${CAT[l.category]||l.category}</span>`:'<span class="tag t-redirect">clean</span>'}</div>
-        ${l.proof_url?`<a href="${esc(l.proof_url)}" target="_blank" rel="noopener" class="mono" style="font-size:10px;color:var(--blue);word-break:break-all">${esc(l.proof_url)}</a>`:''}</div>`).join('');
-      return `<div class="cluster"><div class="ch"><span class="ip">${esc(b)}</span><span class="meta">${bn(g.length)} site · ${bn(hk)} hacked</span><span class="cnt">${bn(hk)}</span></div><div class="cgrid">${items}</div></div>`;
+      const items=g.map(l=>`<div class="cdom" onclick="openLeadObj(MANUAL[${l._i}])"><span class="d">${esc(l.domain)}</span><span style="display:flex;gap:7px;align-items:center">${l.confirmed?`<span class="tag t-${l.category}">${CAT[l.category]||l.category}</span>`:'<span class="tag t-redirect">clean</span>'}<span onclick="event.stopPropagation();delManual(${l.id})" title="মুছুন" style="cursor:pointer;color:var(--muted);font-weight:800;font-size:15px">×</span></span></div>`).join('');
+      return `<div class="cluster"><div class="ch"><span class="ip">${esc(b)}</span><span class="meta">${bn(g.length)} site · ${bn(hk)} hacked</span><span onclick="delManualBatch(this.dataset.b)" data-b="${esc(b)}" title="পুরো batch মুছুন" style="cursor:pointer;color:var(--red);font-weight:700;font-size:11px;margin-left:8px">batch মুছুন</span><span class="cnt">${bn(hk)}</span></div><div class="cgrid">${items}</div></div>`;
     }).join('');
   }catch(e){}
+}
+async function delManual(id){try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:id,status:'rejected'})});}catch(e){}loadManualStore();}
+async function delManualBatch(name){if(!confirm('পুরো "'+name+'" batch মুছবেন?'))return;const ids=MANUAL.filter(l=>(l.mbatch||'(নামহীন batch)')===name).map(l=>l.id);for(const id of ids){try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:id,status:'rejected'})});}catch(e){}}loadManualStore();}
+
+// ---- screenshots gallery (free thum.io hotlink — no storage, no token) ----
+let curShotRegion='bd', curShotCat='', SHOTROWS=[];
+function shotUrl(l,w){let u=(l&&(l.proof_url||('https://'+l.domain)))||'';if(!/^https?:\/\//.test(u))u='https://'+u;return 'https://image.thum.io/get/width/'+(w||500)+'/crop/640/'+u;}
+function shotErr(img){img.onerror=null;img.style.display='none';const ld=img.parentElement.querySelector('.ld');if(ld){ld.style.display='';ld.textContent='preview নেই';}}
+function setShotRegion(el){curShotRegion=el.dataset.sr;el.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===el));renderShots();}
+function setShotCat(el){curShotCat=el.dataset.sc;el.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===el));renderShots();}
+function renderShots(){
+  const grid=document.getElementById('shotgrid');if(!grid)return;
+  SHOTROWS=LEADS.filter(l=>(curShotRegion==='all'||(curShotRegion==='bd'?l.is_bd:!l.is_bd))&&(!curShotCat||l.category===curShotCat)).slice(0,240);
+  document.getElementById('shotHint').textContent=bn(SHOTROWS.length)+' সাইট'+(SHOTROWS.length>=240?' (top 240)':'');
+  grid.innerHTML=SHOTROWS.length?SHOTROWS.map((l,i)=>`<div class="shotcard" onclick="openLeadObj(SHOTROWS[${i}])"><div class="shotimg"><div class="ld">screenshot লোড হচ্ছে…</div><img loading="lazy" src="${shotUrl(l,500)}" onload="this.previousElementSibling.style.display='none'" onerror="shotErr(this)" alt=""><span class="cat tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></div><div class="shotmeta"><span class="d">${esc(l.domain)}</span></div></div>`).join(''):'<div class="empty" style="grid-column:1/-1">এই filter-এ সাইট নেই</div>';
 }
 
 tick();loadLeads();loadFeed();
