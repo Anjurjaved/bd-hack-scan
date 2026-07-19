@@ -1,0 +1,19 @@
+[Unit]
+Description=BD Hack-Audit VM Scanner (heavy fetch+detect engine)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/bd-scanner
+EnvironmentFile=/opt/bd-scanner/scanner.env
+ExecStart=/usr/bin/node /opt/bd-scanner/run.mjs
+# self-heal across crashes, OOM, and reboots — the "must never stop" guarantee the Cloudflare cron couldn't give
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=0
+StandardOutput=append:/var/log/bd-scanner.log
+StandardError=append:/var/log/bd-scanner.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+{
+  "name": "bd-scanner-vm",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "BD Hack-Audit heavy fetch+detect engine for an Oracle always-free VM (no Cloudflare CPU wall). Reuses workers/src/scan.js verbatim.",
+  "main": "run.mjs",
+  "scripts": {
+    "start": "node run.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,5 @@
+# secrets + copied detector (single source of truth is workers/src/; deploy-to-vm.sh copies them fresh)
+scanner.env
+scan.js
+signatures.js
+*.log
