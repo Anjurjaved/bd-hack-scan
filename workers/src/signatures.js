@@ -22,8 +22,22 @@ export const RE = {
   JUNKTLD: /\.(ru|cn|tk|ml|ga|cf|gq|top|xyz|icu|club|cyou|sbs|monster|men|loan)([/:?#]|$)/i,
   SLUG_SPAM: /situs|\bjudi\b|togel|\bgacor\b|maxwin|sbobet|\bpkv\b|slot-?(gacor|online|88|777|deposit)|sabung-?ayam|918kiss|pussy888|mega888|mahjong-?ways|pragmatic-?play|joker123|toto-?(macau|hk|sgp|4d|sdy)/i,
   FOREIGN: /[぀-ヿ㐀-鿿Ѐ-ӿ฀-๿가-힣]/,
-  // classify: gambling/adult brand IN the registrable domain (genuine spam site, exclude)
-  SPAMMY_DOMAIN: /casino|cassino|kasino|kasyno|kazino|cazino|slot|togel|toto|judi|gacor|maxwin|sbobet|bocoran|1xbet|melbet|betwinner|mostbet|parimatch|4rabet|jeetbuzz|jeetwin|bajilive|baji999|betvisa|bettilt|glorycasino|marvelbet|crickex|linebet|pussy888|mega888|joker123|918kiss|bandartogel|pornhub|xvideos|xnxx|sexcam/i,
+  // classify: gambling/adult brand IN the registrable domain (genuine spam site, exclude).
+  // Extended after 331 genuine porn/betting sites leaked into the leads (netbet/bajiok/499bet/iceporn/…). All added
+  // tokens are BOUNDED (specific brand names, or bet/win only when glued to a digit/keyword) so they can NEVER match
+  // a legit BD institution — e.g. "sylhet"/"cabinet"/"alphabet"/"betterment" have no digit-bet and no brand token.
+  // 2026-07-19: added the BD/Bangla porn-brand tail (xxvid … xxxbanla). EVERY token below was dry-run as a LIKE
+  // over the FULL ~446k `domains` corpus and every single hit was eyeballed — all genuine porn, zero legit sites.
+  // DELIBERATELY REJECTED as unsafe by that same dry-run, do NOT re-add bare:
+  //   `xxx`   → hits xxxlgroup.com ("XXXL" is a garment size — a plausible BD garments firm) and xxxtentacion.com
+  //   `eroge` → hits enterogermina.com.bd (a REAL BD pharma site) and aspenaerogels.at
+  //   `choti` → চটি is the everyday Bengali word for SANDAL (chotibd.com/choti24.com = footwear shops)
+  //   `chudi` → চুড়ি = bangles (chudibazar/chudidarbd = garment shops); `khanki` → khankitchen.com
+  //   `sexbd`/`sex\d` → unisexbd/essexbd/unisex24 ("Unisex Salon" is a standard BD business type)
+  //   `randi` → b-RANDI-ng (brandingbd.com); `panu` → japanuniversal.com; `magi` → imaginebd.com; `xvid` → xvidhd
+  // Bangla tokens are therefore only ever used BOUND to a second porn-only token — that is exactly what makes
+  // banglachoti/chotigolpo safe where a bare `choti` would destroy a real shoe shop.
+  SPAMMY_DOMAIN: /casino|cassino|kasino|kasyno|kazino|cazino|\btogel|maxwin|sbobet|bocoran|1xbet|melbet|betwinner|mostbet|parimatch|4rabet|jeetbuzz|jeetwin|bajilive|baji999|betvisa|bettilt|glorycasino|marvelbet|crickex|\blinebet|pussy888|mega888|joker123|918kiss|bandartogel|pornhub|xvideos|xnxx|sexcam|\bnetbet|\bdonbet|jilibet|betjili|dafabet|betway|betfair|betano|22bet|megabet|betsson|unibet|\bwinbet|betflix|betftv|22win|\b1win|\bbwin|babu88|krikya|jaya9|rajabets|9wickets|slot(?:88|777|gacor|online|deposit|xo|vip|\d)|\bgacor|toto(?:macau|hk|sgp|sdy|4d|gel|\d)|situsjudi|judionline|judibola|\d+bet\b|\bbet\d|bet-?game|bet-?win|bookmaker|sportsbook|porn|hentai|xhamster|\bredtube|youporn|brazzers|onlyfans|camgirl|sextube|\bbokep|desichick|desixxx|mmsviral|uncutullu|xxvid|banglachoti|chotigolpo|bfvideo|chudachudi|chodachudi|banglapanu|potnhub|kompoz|banglaxxx|bangladeshixxx|xxxbanla/i,
   SPAMMY_TLD: /\.(bet|casino|poker|porn|sex|xxx|adult)$/i,
   BD_PHONE: /(?:\+?880|\b0)1[3-9]\d{8}\b/,
   BENGALI: /[ঀ-৿]/g,
