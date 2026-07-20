@@ -86,12 +86,24 @@ async function insertDomains(env, source, rows) {
     const res = await env.DB.prepare("INSERT OR IGNORE INTO domains (domain,source,bd_score,business,phone,added_ts) VALUES " + ph).bind(...binds).run();
     inserted += (res.meta && res.meta.changes) || 0;
   }
+  // harvest_log + daily_stats were written ONLY by the /harvest HTTP endpoint (index.js), i.e. only for the VM
+  // and Mac pushes — so all 12 Worker-native harvesters (crux, ip-tree, lead-coip, reverse-ip, bd-ip-sweep …)
+  // were invisible to the dashboard's Sources tab and to daily_stats.harvested. That understated some days by
+  // ~900× (2026-07-16 read 43 harvested; domains.added_ts says 7,012) and is why "harvest has collapsed" has
+  // been diagnosed more than once from an instrument rather than from the data.
   await env.DB.batch([
+    env.DB.prepare("INSERT INTO harvest_log (source,found,new_domains,dups,ts) VALUES (?,?,?,?,?)").bind(source, rows.length, inserted, rows.length - inserted, now),
     env.DB.prepare("INSERT INTO source_state (source,last_run,total_harvested,enabled) VALUES (?,?,?,1) ON CONFLICT(source) DO UPDATE SET last_run=excluded.last_run, total_harvested=total_harvested+?").bind(source, now, inserted, inserted),
+    env.DB.prepare("INSERT INTO daily_stats (day,harvested) VALUES (?,?) ON CONFLICT(day) DO UPDATE SET harvested=harvested+?").bind(dhakaDayH(now), inserted, inserted),
     env.DB.prepare("UPDATE counters SET value=value+? WHERE metric='total_harvested'").bind(inserted),
     env.DB.prepare("UPDATE counters SET value=value+? WHERE metric='total_domains'").bind(inserted),
   ]);
   return inserted;
+}
+
+// Dhaka is UTC+6 and every other day-bucket in this system uses that, so harvest must not silently use UTC.
+function dhakaDayH(nowSec) {
+  return new Date((nowSec + 6 * 3600) * 1000).toISOString().slice(0, 10);
 }
 
 async function setCounter(env, metric, v) {
@@ -591,17 +603,32 @@ export async function harvestCrux(env) {
   const cur = await env.DB.prepare("SELECT value FROM counters WHERE metric='crux_off'").first();
   let off = cur ? Number(cur.value) : 0;
   if (off >= body.length) off = 0;
+  // CrUX "country=BD" means the origin was VISITED by Bangladeshi users — not that it IS Bangladeshi. bdKeep()
+  // only drops known host providers and foreign ccTLDs, so this admitted investing.com, eccouncil.org,
+  // medallia.com, alightmotion.com and a Peru trekking site as BD domains, ~3,240/day, and it has already
+  // contributed 35,645 rows = 18.4% of the corpus. That is the 2026-07-04 "foreign dominates" regression coming
+  // back through a different door, and the standing rule from 2026-07-19 is explicit: a non-.bd domain may be
+  // admitted by HOSTING IP only, never by name. `.bd` still needs no lookup — the registry is the proof.
   const found = new Map();
+  const GATE = Number(env.CRUX_IP_GATE || 220);    // DNS+range lookups per run; the rest wait for the next window
+  let gated = 0, rejected = 0;
   for (let i = 0; i < WIN && off + i < body.length; i++) {
     const line = body[off + i]; if (!line) continue;
     const dom = registrable(line.split(",")[0].trim().replace(/^https?:\/\//, "").split("/")[0]);
-    if (dom && bdKeep(dom) && !found.has(dom)) found.set(dom, { domain: dom, bd: dom.endsWith(".bd") ? 55 : 20 });
+    if (!dom || !bdKeep(dom) || found.has(dom)) continue;
+    if (dom.endsWith(".bd")) { found.set(dom, { domain: dom, bd: 55 }); continue; }
+    if (gated >= GATE) continue;                    // out of lookup budget — do not admit unverified
+    gated++;
+    let ip = "";
+    try { ip = await doh(dom); } catch (e) { /* unresolvable → not admitted */ }
+    if (ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip) && !CDN_RE.test(ip) && (await ipInBd(ip))) found.set(dom, { domain: dom, bd: 35, ip });
+    else rejected++;
   }
   const inserted = await insertDomains(env, "crux", [...found.values()]);
   const next = off + WIN >= body.length ? 0 : off + WIN;
   await setCounter(env, "crux_off", next);
-  await logHarvest(env, "crux", `${month} off ${off}/${body.length}: ${found.size} BD origins, ${inserted} new`);
-  return { month, offset: off, total: body.length, found: found.size, inserted };
+  await logHarvest(env, "crux", `${month} off ${off}/${body.length}: ${found.size} BD-verified origins (${gated} ip-checked, ${rejected} rejected as non-BD), ${inserted} new`);
+  return { month, offset: off, total: body.length, found: found.size, ipChecked: gated, rejected, inserted };
 }
 
 // RIPEstat country-resource-list — the REGISTRY's own authoritative BD IPv4 allocation (2314 prefixes).

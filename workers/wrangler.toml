@@ -91,3 +91,11 @@ CRUX_MONTH = "202605"
 SCAN_SHARDS = "16"
 SCAN_SHARD = "0"
 SCAN_SUBDOMAIN = "javed-it"
+# ip_frontier drains at ~170 /24 blocks/day against a 4,320-block unswept backlog — ~25 days — and the
+# IP-derived sources (pdns-iptree, ip-tree, tls-san) are 83% of current growth now that .bd is exhausted.
+# 20 sweeps + 8 resolves + overhead stays inside the free plan's 50-subrequest ceiling on this dedicated
+# */20 invocation. Raise further only with the subrequest budget measured, not assumed.
+IPTREE_SWEEP = "20"
+# Non-.bd CrUX origins are now admitted by hosting IP only, never by name. This is the per-run DNS+range
+# lookup budget for that check; origins beyond it wait for the next window rather than being let in blind.
+CRUX_IP_GATE = "220"

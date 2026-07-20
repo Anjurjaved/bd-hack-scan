@@ -61,6 +61,13 @@
   .t-gambling{background:#fdeaec;color:#c0263a}.t-pharma{background:#eaf2ff;color:#1f5bd6}.t-adult{background:#f5ebff;color:#7b2fff}
   .t-cloak{background:#fff3e0;color:#c5781b}.t-deface{background:#ffe9e9;color:#d4313f}.t-redirect{background:#e9fbf3;color:#0f9d6a}
   .t-foreign_lang{background:#eef0f4;color:#5b7088}.t-malware{background:#241c2e;color:#ff7a8a}
+  /* The review card carries a second line (why it is here), so it stacks instead of using .shotmeta's
+     space-between row — which squeezed the domain down to "theph…" on a phone. */
+  .revmeta{flex-direction:column;align-items:flex-start;gap:3px}
+  .revmeta .d{max-width:100%;font-size:12.5px}
+  .revwhy{font-size:10.5px;color:var(--muted);line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+  .t-exposure{background:#fff6df;color:#a06a00}
+  .t-parked{background:#eef0f4;color:#7b8ca0}
   .mono{font-family:var(--fm);font-size:11.5px} .proof{color:var(--muted);font-size:11.5px;max-width:330px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .bar{height:8px;border-radius:6px;background:var(--line);overflow:hidden}.bar>i{display:block;height:100%;border-radius:6px}
   .legend{display:flex;gap:13px;flex-wrap:wrap;font-size:11px;color:var(--muted);padding:0 15px 11px}
@@ -234,6 +241,81 @@
   .shard.live::after{content:"";position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 1.8s infinite}
   .sortsel{border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:11.5px;font-weight:600;color:var(--ink);background:var(--panel2);font-family:var(--f);cursor:pointer}
   @media(max-width:640px){ .fleet{grid-template-columns:repeat(3,1fr)} .lp-grid{grid-template-columns:repeat(2,1fr)} .divider{margin:16px 2px 12px} }
+
+  /* ============================================================================
+     MOBILE LAYER — everything below is the responsive pass (2026-07-20).
+     Rules: the PAGE never scrolls sideways; anything genuinely wide (tables,
+     cluster rows) scrolls inside its own box. Small cards stay on a 2-3 column
+     grid — never one long serial column. Touch targets >= 40px.
+     ============================================================================ */
+  html,body{max-width:100%;overflow-x:hidden;overscroll-behavior-y:none}
+  .wrap{width:100%}
+  /* Any wide block scrolls itself, so the page body never does. */
+  .scroll,.tblwrap{overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+  .tblwrap{width:100%}
+  .tblwrap>table{min-width:640px}
+
+  @media(max-width:900px){
+    .wrap{padding:10px clamp(8px,3vw,16px) calc(58px + env(safe-area-inset-bottom))}
+    header{gap:9px;padding:8px 0 4px}
+    .logo .mark{width:33px;height:33px;border-radius:9px} .logo .mark svg{width:18px;height:18px}
+    .logo h1{font-size:15px} .logo p{font-size:10px}
+    .live{margin-left:0;width:100%;gap:7px}
+    .pill{padding:5px 10px;font-size:11px}
+    /* Tabs become a single swipeable strip. Wrapping 10 tabs on a phone produced a
+       four-line block that pushed the actual content below the fold. */
+    .tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;
+          scroll-snap-type:x proximity;gap:2px;margin:10px 0 12px;padding-bottom:1px;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex:0 0 auto;scroll-snap-align:start;padding:10px 12px;font-size:12.5px;min-height:42px}
+    .tab svg{width:14px;height:14px}
+    .panel h2{padding:11px 13px;font-size:12.5px} .pad{padding:11px 13px}
+    .grid,.row{gap:10px;margin-bottom:10px}
+    /* Small cards: 2 across, never a single serial column. */
+    .cards{grid-template-columns:repeat(2,1fr);gap:9px}
+    .card{padding:12px 12px;border-radius:13px}
+    .card .val{font-size:22px} .card .lab{font-size:10.5px} .card .sub{font-size:10px}
+    .card .ic{width:24px;height:24px;right:9px;top:10px} .card .ic svg{width:13px;height:13px}
+    /* Tables keep their real width and scroll horizontally inside the panel. */
+    table{font-size:12px} th,td{padding:7px 9px;white-space:nowrap}
+    td.wrapcell{white-space:normal;min-width:150px}
+    /* Keep real column widths and let the .scroll box carry the overflow, rather than
+       letting the table squash into an unreadable column of wrapped fragments.
+       #leads is EXCLUDED: it already has a proper stacked-card layout below 640px
+       (thead hidden, each td labelled from data-label), and forcing a min-width on
+       that pushes every value outside the visible card. */
+    .scroll>table:not(#leads){min-width:660px}
+    .scroll{max-height:none}
+    .btn{min-height:40px;padding:9px 13px}
+    .chip{min-height:32px}
+    /* Filter chip rows become ONE swipeable line. Wrapped, the 33 business-type chips filled an entire
+       phone screen before a single lead was visible — the tab's actual content started below the fold. */
+    #bizFilter,#catFilter,.filters,#revFilter{flex-wrap:nowrap!important;overflow-x:auto;overscroll-behavior-x:contain;
+      -webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none;padding-bottom:2px}
+    #bizFilter::-webkit-scrollbar,#catFilter::-webkit-scrollbar,.filters::-webkit-scrollbar,#revFilter::-webkit-scrollbar{display:none}
+    #bizFilter .chip,#catFilter .chip,.filters .chip,#revFilter .chip{flex:0 0 auto;scroll-snap-align:start}
+    select,input,textarea{font-size:16px}   /* < 16px makes iOS Safari zoom on focus */
+  }
+  @media(max-width:520px){
+    .cards{grid-template-columns:repeat(2,1fr)}
+    .fleet{grid-template-columns:repeat(4,1fr);padding:11px}
+    .shotgrid{grid-template-columns:repeat(2,1fr)}
+    .card .val{font-size:20px}
+    .logo p{display:none}
+  }
+  /* The old rule collapsed the stat cards to ONE column here, which is exactly the
+     boring single-serial-column layout to avoid — keep two even on the smallest phones. */
+  @media(max-width:380px){
+    .cards{grid-template-columns:repeat(2,1fr)}
+    .card{padding:10px} .card .val{font-size:18px}
+    .tab{padding:9px 10px;font-size:12px}
+  }
+  /* Modal: scrollable panel, momentum scrolling, and never taller than the visual
+     viewport (svh, so the mobile URL bar cannot cut off the buttons). */
+  .modal .box,.modal-box,#modalBg>div{max-height:88svh}
+  @media(max-width:640px){
+    .modal .box,.modal-box,#modalBg>div{max-height:92svh;border-radius:14px;width:calc(100vw - 20px)}
+  }
 </style>
 </head>
 <body>
@@ -354,7 +436,7 @@
     </div>
     <div class="divider"><span class="dl"><span class="di di-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg></span> shard fleet — Cloudflare parallel scanner</span></div>
     <div class="row r-2b">
-      <div class="panel"><h2>scan engine — ৮ parallel shard (always-on)<small id="wHint"></small></h2><div id="fleetBox" class="fleet"></div><div style="display:none"><table id="workers"><tbody></tbody></table></div></div>
+      <div class="panel"><h2>scan engine — ১৬ parallel shard + Oracle VM (always-on)<small id="wHint"></small></h2><div id="fleetBox" class="fleet"></div><div style="display:none"><table id="workers"><tbody></tbody></table></div></div>
       <div class="panel"><h2>scan health</h2><div class="pad" id="healthBox"></div></div>
     </div>
   </div>
@@ -427,12 +509,13 @@
   <!-- REVIEW QUEUE — adult findings on non-.bd domains never auto-publish; a human decides. -->
   <div class="view" id="v-review">
     <div class="panel">
-      <h2>অনুমোদনের অপেক্ষায় — adult শ্রেণির সন্দেহভাজন<small id="revHint"></small></h2>
+      <h2>অনুমোদনের অপেক্ষায় — মানুষের সিদ্ধান্ত দরকার<small id="revHint"></small></h2>
       <div style="padding:11px 15px;color:var(--muted);font-size:12.5px;line-height:1.7;border-bottom:1px solid var(--line)">
-        adult শ্রেণিতে ২৬টা আসল porn সাইট lead হিসেবে ঢুকে পড়েছিল, কারণ AI ওদের "hacked_client" বলেছিল। তাই এখন
-        <b>.bd / .edu.bd / .gov.bd ছাড়া কোনো adult finding নিজে থেকে lead হয় না</b> — এখানে জমা হয়, আপনি দেখে সিদ্ধান্ত দেন।
-        screenshot দেখে বুঝে নিন সাইটটা আসল ব্যবসা নাকি porn সাইট।
+        যেসব finding নিজে থেকে lead হয় না — <b>.bd ছাড়া adult</b>, <b>একটিমাত্র সাধারণ ইংরেজি শব্দ</b> (slots/casino —
+        যেভাবে ভর্তি portal ও সরকারি API ভুলভাবে lead হয়ে গিয়েছিল), আর AI pool শেষ থাকা অবস্থার finding।
+        <b style="color:var(--gold)">সোনালি বর্ডার = বাংলাদেশি সাইট + শক্ত প্রমাণ</b> — এগুলোই আসল ভুক্তভোগী, সবার আগে দেখুন।
       </div>
+      <div id="revFilter" style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 15px;border-bottom:1px solid var(--line)"></div>
       <div class="shotgrid" id="revgrid"></div>
     </div>
   </div>
@@ -475,7 +558,7 @@
     </div>
   </div>
 
-  <footer>BD Hack-Audit · 100% free (Cloudflare Workers cron · ৮ parallel shard) · তৈরি করেছে <a href="https://javeditsolution.com" target="_blank" rel="noopener noreferrer">Javed IT Solution</a></footer>
+  <footer>BD Hack-Audit · 100% free (Cloudflare Workers cron · ১৬ parallel shard + Oracle VM) · তৈরি করেছে <a href="https://javeditsolution.com" target="_blank" rel="noopener noreferrer">Javed IT Solution</a></footer>
 </div>
 
 <!-- LEAD DETAIL MODAL -->
@@ -493,10 +576,13 @@
 <script src="config.js"></script>
 <script>
 const API=(window.API_BASE||"").replace(/\/$/,"");
+// The fleet is 16 (wrangler.toml SCAN_SHARDS), not the 8 this file used to hardcode in three places —
+// which rendered "১৫/৮ live shard". Overridable from config.js so the two can never drift again.
+const SHARDS=Number(window.SCAN_SHARDS||16);
 const bn=n=>(n==null?"—":Number(n).toLocaleString('en-US')).replace(/[0-9]/g,d=>"০১২৩৪৫৬৭৮৯"[d]);
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ago=ts=>{if(!ts)return"—";const s=Math.floor(Date.now()/1000)-ts;if(s<60)return bn(s)+" সেকেন্ড আগে";if(s<3600)return bn(Math.floor(s/60))+" মিনিট আগে";if(s<86400)return bn(Math.floor(s/3600))+" ঘণ্টা আগে";return bn(Math.floor(s/86400))+" দিন আগে";};
-const CAT={gambling:'জুয়া/ক্যাসিনো',pharma:'ওষুধ স্প্যাম',adult:'অ্যাডাল্ট',cloak:'cloaking',deface:'defacement',redirect:'redirect',foreign_lang:'বিদেশি ভাষা',malware:'malware',exposure:'গোপন ফাইল ফাঁস'};
+const CAT={gambling:'জুয়া/ক্যাসিনো',pharma:'ওষুধ স্প্যাম',adult:'অ্যাডাল্ট',cloak:'cloaking',deface:'defacement',redirect:'redirect',foreign_lang:'বিদেশি ভাষা',malware:'malware',exposure:'গোপন ফাইল ফাঁস',parked:'পার্কড ডোমেইন'};
 // human description of every domain-collection method shown on the Harvest tab
 const SRC_INFO={
   'existing-bulk':{d:'আপনার আগের bulk domain তালিকা (mixed)',k:'mixed'},
@@ -526,23 +612,49 @@ document.getElementById('tabs').onclick=e=>{const t=e.target.closest('.tab');if(
   if(t.dataset.v==='safe')loadSafe(true);};
 
 // ---- review queue: adult findings that must not auto-publish ----
-let REVROWS=[];
+let REVROWS=[], REVTOTAL=0, REVCAT='';
+// Category filter for the review queue. The server does the filtering (status + category are both SQL
+// predicates now), so picking a category re-queries rather than slicing whatever happened to be fetched.
+function setRevCat(c){ REVCAT=(REVCAT===c?'':c); loadReview(); }
+function renderRevFilter(){
+  const box=document.getElementById('revFilter'); if(!box)return;
+  const counts={}; for(const l of REVROWS) counts[l.category||'other']=(counts[l.category||'other']||0)+1;
+  const cats=['gambling','foreign_lang','adult','pharma','malware','redirect','deface'];
+  box.innerHTML=`<span class="chip${REVCAT?'':' on'}" onclick="setRevCat('')">সব (${bn(REVTOTAL)})</span>`
+    +cats.map(c=>`<span class="chip${REVCAT===c?' on':''}" onclick="setRevCat('${c}')">${esc(CAT[c]||c)}${counts[c]?' '+bn(counts[c]):''}</span>`).join('');
+}
 async function loadReview(){
   const grid=document.getElementById('revgrid'); if(!grid)return;
   grid.innerHTML='<div class="empty" style="grid-column:1/-1">লোড হচ্ছে…</div>';
+  // This used to fetch `confirmed=0&limit=500` (a ~10-hour ts DESC window) and then keep only
+  // `category==='adult'`. That window contained zero adult rows, so the tab rendered "nothing pending" while
+  // thousands of findings waited — and 1,117 gambling findings had no approval path in the UI at all. The
+  // status predicate is now server-side, and every category is shown.
   try{
-    const r=await(await fetch(API+'/api/leads?confirmed=0&limit=500',{cache:'no-store'})).json();
-    REVROWS=(r.leads||[]).filter(l=>l.status==='review'&&l.category==='adult');
-  }catch(e){REVROWS=[];}
-  document.getElementById('revBadge').textContent=bn(REVROWS.length);
-  document.getElementById('revHint').textContent=' · '+bn(REVROWS.length)+' টি অপেক্ষমাণ';
-  if(!REVROWS.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1">অপেক্ষমাণ কিছু নেই ✅</div>';return;}
+    const qs='/api/leads?confirmed=0&status=review&slim=1&limit=600'+(REVCAT?'&category='+encodeURIComponent(REVCAT):'');
+    const r=await(await fetch(API+qs,{cache:'no-store'})).json();
+    REVROWS=r.leads||[]; REVTOTAL=r.total??REVROWS.length;
+  }catch(e){REVROWS=[];REVTOTAL=0;}
+  // Put the ones a human should actually adjudicate first: Bangladeshi sites carrying hard spam evidence are
+  // real victims waiting to be sold to; a foreign site matching one generic word can wait.
+  const HARD=/L1KW_STRONG|L11REST|L11SITEMAP|L17HIDDEN|L2UACLOAK|L3REFCLOAK/;
+  const rank=l=>(l.is_bd?0:2)+(HARD.test(l.layers||'')?0:1);
+  REVROWS.sort((a,b)=>rank(a)-rank(b)||(b.ts||0)-(a.ts||0));
+  document.getElementById('revBadge').textContent=bn(REVTOTAL);
+  const bdHard=REVROWS.filter(l=>l.is_bd&&HARD.test(l.layers||'')).length;
+  document.getElementById('revHint').textContent=' · '+bn(REVTOTAL)+' টি অপেক্ষমাণ'+(bdHard?' · '+bn(bdHard)+' টি BD শক্ত-প্রমাণ (উপরে)':'');
+  renderRevFilter();
+  if(!REVROWS.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1">অপেক্ষমাণ কিছু নেই</div>';return;}
   grid.innerHTML=REVROWS.map((l,i)=>{
     const u='https://'+(l.apex||l.domain);
-    return `<div class="shotcard"><div class="shotimg"><div class="ld">screenshot…</div><img data-src="${shotUrl(l,500)}" data-u="${esc(u)}" onload="shotLoad(this)" onerror="shotErr(this)" alt=""><span class="cat tag t-adult">adult</span></div>`
-      +`<div class="shotmeta"><a class="d" href="${esc(u)}" target="_blank" rel="noopener">${esc(l.apex||l.domain)}</a></div>`
-      +`<div style="display:flex;gap:7px;padding:0 11px 11px"><button class="btn" style="flex:1;background:var(--green,#16a34a);color:#fff;border:0;border-radius:8px;padding:7px;font-weight:700;cursor:pointer" onclick="decideReview(${l.id},'lead',this)">আসল ভুক্তভোগী — lead করুন</button>`
-      +`<button class="btn" style="flex:1;background:#e23d52;color:#fff;border:0;border-radius:8px;padding:7px;font-weight:700;cursor:pointer" onclick="decideReview(${l.id},'rejected',this)">porn সাইট — বাদ</button></div></div>`;
+    const cat=l.category||'other';
+    const strong=l.is_bd&&HARD.test(l.layers||'');
+    const why=l.stage2_reason||l.proof_snippet||'';
+    return `<div class="shotcard"${strong?' style="outline:2px solid var(--gold);outline-offset:-2px"':''}><div class="shotimg"><div class="ld">screenshot…</div><img data-src="${shotUrl(l,500)}" data-u="${esc(u)}" onload="shotLoad(this)" onerror="shotErr(this)" alt=""><span class="cat tag t-${esc(cat)}">${esc(CAT[cat]||cat)}</span></div>`
+      +`<div class="shotmeta revmeta"><a class="d" href="${esc(u)}" target="_blank" rel="noopener" title="${esc(l.apex||l.domain)}">${esc(l.apex||l.domain)}</a>`
+      +`<div class="revwhy">${l.is_bd?'বাংলাদেশি':'International'}${strong?' · শক্ত প্রমাণ':''}${why?' · '+esc(String(why).slice(0,90)):''}</div></div>`
+      +`<div style="display:flex;gap:7px;padding:0 11px 11px"><button class="btn" style="flex:1;background:var(--green,#16a34a);color:#fff;border:0;border-radius:8px;padding:8px;font-weight:700;cursor:pointer" onclick="decideReview(${l.id},'lead',this)">আসল ভুক্তভোগী — lead</button>`
+      +`<button class="btn" style="flex:1;background:#e23d52;color:#fff;border:0;border-radius:8px;padding:8px;font-weight:700;cursor:pointer" onclick="decideReview(${l.id},'rejected',this)">বাদ দিন</button></div></div>`;
   }).join('');
   const obs=new IntersectionObserver((es,o)=>{es.forEach(e=>{if(e.isIntersecting){e.target.src=e.target.dataset.src;o.unobserve(e.target);}})},{rootMargin:'500px'});
   grid.querySelectorAll('img[data-src]').forEach(im=>obs.observe(im));
@@ -760,11 +872,32 @@ function dedupeLeads(arr){
     return r;
   });
 }
+// One fixed limit=3000 request every 30s was ~1.6MB per poll AND a silent cliff: the API caps limit at 5000
+// and the query is ORDER BY ts DESC, so once the corpus passed 3,000 the OLDEST leads simply vanished — from
+// the list, the badges, the gallery and every export at once, with no error. It pages now: the server reports
+// `total`/`hasMore`, and we walk it until done. Only the first page blocks the render, so the table paints
+// immediately and fills in behind.
+const PAGE=1000, MAX_PAGES=25;
+let LEADS_TOTAL=0, _leadsLoading=false;
 async function loadLeads(){
-  try{const r=await(await fetch(API+"/api/leads?slim=1&limit=3000",{cache:'no-store'})).json();
-    LEADS=dedupeLeads(r.leads||[]); // one row per domain → badges/list/headline all agree on the distinct count
+  if(_leadsLoading)return; _leadsLoading=true;
+  try{
+    let out=[],off=0,total=0;
+    for(let p=0;p<MAX_PAGES;p++){
+      const r=await(await fetch(API+"/api/leads?slim=1&limit="+PAGE+"&offset="+off,{cache:'no-store'})).json();
+      const batch=r.leads||[]; out=out.concat(batch); total=r.total??out.length;
+      if(p===0){ // paint the first page straight away, then keep filling
+        LEADS=dedupeLeads(out);updateBadges();renderLeads();
+      }
+      if(!r.hasMore||!batch.length)break;
+      off+=batch.length;
+    }
+    LEADS_TOTAL=total;
+    LEADS=dedupeLeads(out);
     updateBadges();renderLeads();
-    if(document.getElementById('v-shots').classList.contains('on'))renderShots();}catch(e){}
+    if(document.getElementById('v-shots').classList.contains('on'))renderShots();
+  }catch(e){}
+  finally{_leadsLoading=false;}
 }
 function renderLeads(){
   const q=(document.getElementById('leadSearch').value||"").toLowerCase();
@@ -873,10 +1006,37 @@ function exportPDF(rows){
 function phoneIntl(p){p=(p||"").replace(/[^0-9]/g,"");if(!p)return"";if(p.startsWith("880"))return p;if(p.startsWith("0"))return"88"+p;if(p.length===10)return"880"+p;return p;}
 function googleQ(l){const k={gambling:"casino OR slot OR togel",pharma:"viagra OR cialis",adult:"porn OR xxx",deface:"hacked"}[l.category]||"";return "https://www.google.com/search?q="+encodeURIComponent("site:"+l.domain+(k?" "+k:""));}
 function sucuri(l){return "https://sitecheck.sucuri.net/results/"+encodeURIComponent(l.domain);}
+// `exposure` (layers/deep.js) means a readable .git / backup / .env / config — the site is NOT serving spam.
+// Saying "spam has been injected" to that owner would be a false claim, so it needs its own message, its own
+// urgency and its own fix. This was CALLED but never DEFINED: clicking such a card threw
+// "ReferenceError: exposurePitch is not defined" and the modal silently did nothing. Harmless only while zero
+// exposure rows exist — it would have started firing the moment detector v2 reached the VM, which it now has.
+function exposurePitch(l){
+  const host=l.apex||l.domain;
+  let ev=[];try{ev=JSON.parse(l.evidence||"[]")}catch(e){}
+  const first=(ev[0]&&ev[0].url)||l.proof_url||("https://"+host+"/");
+  return `আসসালামু আলাইকুম${l.business?', '+l.business:''}।
+
+আমি Anjur Javed — Javed IT Solution। আপনার ওয়েবসাইট ${host} নিয়ে একটা জরুরি নিরাপত্তা ত্রুটি জানাচ্ছি।
+
+আপনার সাইট এখনো হ্যাক হয়নি — কিন্তু সার্ভারের গোপন ফাইল ইন্টারনেটে যে কারো জন্য খোলা আছে:
+${first}
+
+এর মানে ডেটাবেস পাসওয়ার্ড, অ্যাডমিন তথ্য ও সোর্স কোড যে কেউ ডাউনলোড করতে পারছে। হ্যাকাররা স্বয়ংক্রিয় স্ক্যানার দিয়ে ঠিক এই ফাইলগুলোই খোঁজে — সাধারণত কয়েক দিনের মধ্যেই সাইট দখল হয়ে যায়।
+
+ভালো খবর: এখনই বন্ধ করলে কোনো ক্ষতি হবে না। কাজটা ছোট, কয়েক ঘণ্টার।
+
+আমরা যা করব:
+১) খোলা ফাইলগুলো সাথে সাথে বন্ধ
+২) ফাঁস হওয়া পাসওয়ার্ড পরিবর্তন
+৩) পুরো সার্ভার স্ক্যান — কেউ আগেই ঢুকেছে কিনা নিশ্চিত করা
+৪) ভবিষ্যতে যেন না হয় সেই সুরক্ষা
+
+আজই শুরু করতে পারি। বলুন কখন কথা বলব?
+
+— Anjur Javed · Javed IT Solution · javeditsolution.com`;
+}
 function pitch(l){
-  // `exposure` is NOT an injection — the site is not serving spam, its .git/backup/config is readable by anyone.
-  // It gets its own message because telling an owner "spam has been injected" when it has not is a false claim,
-  // and the fix and the urgency are different too.
   if(l.category==='exposure')return exposurePitch(l);
   const cb={gambling:'লুকানো জুয়া/ক্যাসিনো স্প্যাম পেজ',pharma:'ভায়াগ্রা/ওষুধ স্প্যাম পেজ',adult:'অ্যাডাল্ট/পর্ন স্প্যাম',deface:'হ্যাকারের ডিফেস বার্তা',cloak:'গোপন cloaked স্প্যাম (শুধু Google দেখে)',redirect:'ক্ষতিকর redirect',malware:'ক্ষতিকর malware কোড',foreign_lang:'বিদেশি ভাষার স্প্যাম পেজ'}[l.category]||'স্প্যাম injection';
   let ev=[];try{ev=JSON.parse(l.evidence||"[]")}catch(e){}
@@ -971,7 +1131,7 @@ function renderLiveProcess(){
     lpStat('শেষ scan tick',bn(tickAgo)+'s আগে','<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')+
     lpStat('rate (এই ঘণ্টা)',bn(rate)+'/hr','<path d="M3 12h4l3 8 4-16 3 8h4"/>')+
     lpStat('আজ scanned',bn(today.scanned||0),'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>')+
-    lpStat('live shard',bn(liveShards||0)+'/৮','<rect x="2" y="3" width="20" height="7" rx="1.5"/><rect x="2" y="14" width="20" height="7" rx="1.5"/>')+
+    lpStat('live shard',bn(liveShards||0)+'/'+bn(SHARDS),'<rect x="2" y="3" width="20" height="7" rx="1.5"/><rect x="2" y="14" width="20" height="7" rx="1.5"/>')+
     lpStat('queue বাকি',bn(ready),'<path d="M3 6h18M3 12h18M3 18h18"/>')+
     lpStat('confirmed (live)',bn(s.confirmed_sites||0),'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>');
   const steps=document.getElementById('lpSteps');
@@ -989,13 +1149,13 @@ function renderLiveProcess(){
 function renderFleet(s){
   const box=document.getElementById('fleetBox'); if(!box)return;
   const eng=(s.workers||[]).find(w=>w.worker_id==='cf-engine')||(s.workers||[])[0];
-  const TOTAL=8, nowS=Math.floor(Date.now()/1000), seen=eng?eng.last_seen:0, running=seen&&(nowS-seen)<150;
+  const TOTAL=SHARDS, nowS=Math.floor(Date.now()/1000), seen=eng?eng.last_seen:0, running=seen&&(nowS-seen)<150;
   const live=running?Math.min(TOTAL,(eng&&eng.current_batch)||TOTAL):0;
   let html='';
   for(let i=0;i<TOTAL;i++){const isLive=i<live;
     html+=`<div class="shard ${isLive?'live':''}"><div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/></svg></div><div class="nm">shard-${'০১২৩৪৫৬৭'[i]||i}</div><div class="st">${isLive?'scanning':'idle'}</div></div>`;}
   box.innerHTML=html;
-  const wh=document.getElementById('wHint'); if(wh)wh.textContent=bn(live)+'/৮ live'+(eng?' · '+bn(eng.scanned_total)+' scanned':'');
+  const wh=document.getElementById('wHint'); if(wh)wh.textContent=bn(live)+'/'+bn(SHARDS)+' live'+(eng?' · '+bn(eng.scanned_total)+' scanned':'');
 }
 
 // ---- manual scan ----
@@ -1091,7 +1251,7 @@ function shotCard(l,i){const u=(l.proof_url||('https://'+l.domain));const org=l.
   return `<div class="shotcard" onclick="openLeadObj(SHOTROWS[${i}])"><div class="shotimg"><div class="ld">screenshot…</div><img data-src="${shotUrl(l,500)}" data-u="${esc(u)}" onload="shotLoad(this)" onerror="shotErr(this)" alt=""><span class="cat tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></div><div class="shotmeta"><span class="d">${esc(org)}</span>${multi}</div></div>`;}
 function renderShotCats(rows){
   const cats={};rows.forEach(l=>{cats[l.category]=(cats[l.category]||0)+1;});
-  const order=['gambling','redirect','malware','deface','pharma','adult','cloak','foreign_lang'].filter(c=>cats[c]);
+  const order=['gambling','redirect','malware','deface','pharma','adult','cloak','foreign_lang','exposure','parked'].filter(c=>cats[c]);
   document.getElementById('shotCatBar').innerHTML=`<span class="lab" style="font-size:11.5px;color:var(--muted);font-weight:700">ধরন:</span><span class="chip ${!curShotCat?'on':''}" data-sc="" onclick="setShotCat(this)">সব · ${bn(rows.length)}</span>`+order.map(c=>`<span class="chip ${curShotCat===c?'on':''}" data-sc="${c}" onclick="setShotCat(this)">${CAT[c]||c} · ${bn(cats[c])}</span>`).join('');
 }
 function lazyShots(){
@@ -1129,7 +1289,7 @@ function renderShotsGrid(){
   lazyShots();
 }
 
-function bootApp(){tick();loadLeads();loadFeed();setInterval(tick,15000);setInterval(loadFeed,15000);setInterval(loadLeads,30000);
+function bootApp(){tick();loadLeads();loadFeed();loadReview();setInterval(tick,15000);setInterval(loadReview,60000);setInterval(loadFeed,15000);setInterval(loadLeads,30000);
 // live-process ages tick every second from CACHED stats+feed only — no network, zero API/CF load
 setInterval(renderLiveProcess,1000);}
 async function doAuthLogin(){const u=(document.getElementById('authUser').value||'').trim(),p=document.getElementById('authPass').value||'';const er=document.getElementById('authErr');er.style.color='#64748b';er.textContent='…';try{const r=await fetch(API+'/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({user:u,pass:p})});const j=await r.json().catch(()=>({}));if(r.ok&&j.ok){er.style.color='#10b981';er.textContent='✓';location.reload();}else{er.style.color='#dc2626';er.textContent=j.error||'ভুল';}}catch(e){er.style.color='#dc2626';er.textContent='সমস্যা, আবার চেষ্টা করুন';}}

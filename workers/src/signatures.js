@@ -62,7 +62,14 @@ export const RE = {
   //   `randi` → b-RANDI-ng (brandingbd.com); `panu` → japanuniversal.com; `magi` → imaginebd.com; `xvid` → xvidhd
   // Bangla tokens are therefore only ever used BOUND to a second porn-only token — that is exactly what makes
   // banglachoti/chotigolpo safe where a bare `choti` would destroy a real shoe shop.
-  SPAMMY_DOMAIN: /casino|cassino|kasino|kasyno|kazino|cazino|\btogel|maxwin|sbobet|bocoran|1xbet|melbet|betwinner|mostbet|parimatch|4rabet|jeetbuzz|jeetwin|bajilive|baji999|betvisa|bettilt|glorycasino|marvelbet|crickex|\blinebet|pussy888|mega888|joker123|918kiss|bandartogel|pornhub|xvideos|xnxx|sexcam|\bnetbet|\bdonbet|jilibet|betjili|dafabet|betway|betfair|betano|22bet|megabet|betsson|unibet|\bwinbet|betflix|betftv|22win|\b1win|\bbwin|babu88|krikya|jaya9|rajabets|9wickets|slot(?:88|777|gacor|online|deposit|xo|vip|\d)|\bgacor|toto(?:macau|hk|sgp|sdy|4d|gel|\d)|situsjudi|judionline|judibola|\d+bet\b|\bbet\d|bet-?game|bet-?win|bookmaker|sportsbook|porn|hentai|xhamster|\bredtube|youporn|brazzers|onlyfans|camgirl|sextube|\bbokep|desichick|desixxx|mmsviral|uncutullu|xxvid|banglachoti|chotigolpo|bfvideo|chudachudi|chodachudi|banglapanu|potnhub|kompoz|banglaxxx|bangladeshixxx|xxxbanla/i,
+  // 2026-07-20 tail (choti-kahini … xxx-porn): three brands had reached the SALES LIST as "hacked victims"
+  // because the AI answered hacked_client — 555ww.live (স্লট গেম · লাইভ ক্যাসিনো on its OWN homepage),
+  // banglaxchotikahini.com and xxxvideo.wtf. The existing tokens could not see them: `banglachoti` cannot match
+  // "bangla-X-choti", and nothing covered the numeric gambling-brand or xxx-video families. Every added pattern
+  // was dry-run over the FULL 195,336-domain corpus and all 208 hits eyeballed — 100% porn/gambling, zero legit
+  // BD businesses. `^\d{3,4}…` is anchored to the REGISTRABLE domain on purpose, so slot88.raahs.edu.bd — an
+  // attacker-created subdomain on a real school, i.e. a genuine high-value victim — is deliberately NOT matched.
+  SPAMMY_DOMAIN: /casino|cassino|kasino|kasyno|kazino|cazino|\btogel|maxwin|sbobet|bocoran|1xbet|melbet|betwinner|mostbet|parimatch|4rabet|jeetbuzz|jeetwin|bajilive|baji999|betvisa|bettilt|glorycasino|marvelbet|crickex|\blinebet|pussy888|mega888|joker123|918kiss|bandartogel|pornhub|xvideos|xnxx|sexcam|\bnetbet|\bdonbet|jilibet|betjili|dafabet|betway|betfair|betano|22bet|megabet|betsson|unibet|\bwinbet|betflix|betftv|22win|\b1win|\bbwin|babu88|krikya|jaya9|rajabets|9wickets|slot(?:88|777|gacor|online|deposit|xo|vip|\d)|\bgacor|toto(?:macau|hk|sgp|sdy|4d|gel|\d)|situsjudi|judionline|judibola|\d+bet\b|\bbet\d|bet-?game|bet-?win|bookmaker|sportsbook|porn|hentai|xhamster|\bredtube|youporn|brazzers|onlyfans|camgirl|sextube|\bbokep|desichick|desixxx|mmsviral|uncutullu|xxvid|banglachoti|chotigolpo|bfvideo|chudachudi|chodachudi|banglapanu|potnhub|kompoz|banglaxxx|bangladeshixxx|xxxbanla|choti-?kahini|choti-?golpo|bangla-?x-?choti|ch[ou]da-?ch[ou]di|^\d{3,4}ww\b|^\d{3,4}(?:bet|win|jili)\b|xxx-?video|xxx-?tube|xxx-?porn/i,
   SPAMMY_TLD: /\.(bet|casino|poker|porn|sex|xxx|adult)$/i,
   BD_PHONE: /(?:\+?880|\b0)1[3-9]\d{8}\b/,
   BENGALI: /[ঀ-৿]/g,

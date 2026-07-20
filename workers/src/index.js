@@ -591,6 +591,22 @@ async function apiDomains(env, url) {
   else if (region === "intl") where += " AND bd_score<25 AND domain NOT LIKE '%.bd'";
   if (source) { where += " AND source=?"; binds.push(source); }
   if (q) { where += " AND (lower(domain) LIKE ? OR lower(business) LIKE ?)"; binds.push("%" + q + "%", "%" + q + "%"); }
+  // `biz` is derived in JS from the domain+business text, so it cannot be a SQL predicate. It was previously
+  // applied AFTER LIMIT/OFFSET, which broke two things at once: the count branch ignored it entirely
+  // (?biz=education&count=1 answered 118,314 — the UNFILTERED total — while the list returned 446 rows), and
+  // paging advanced the offset by the FILTERED length against an UNFILTERED query, so rows were both repeated
+  // and skipped. Now we over-fetch in windows and filter before slicing, so count and paging agree.
+  if (biz) {
+    const CAP = 20000;                 // bounded work per request; `truncated` tells the caller we stopped early
+    const rows = (await env.DB.prepare(
+      "SELECT domain,business,bd_score,source,pass_no,ip FROM domains WHERE " + where + " ORDER BY bd_score DESC, domain LIMIT ?"
+    ).bind(...binds, CAP).all()).results || [];
+    for (const r of rows) r.category = bizType(r.domain, "", r.business || "");
+    const all = rows.filter((r) => r.category === biz);
+    if (wantCount) return json({ ok: true, type, region: region || "all", count: all.length, truncated: rows.length >= CAP });
+    const page = all.slice(offset, offset + limit);
+    return json({ ok: true, type, region: region || "all", count: all.length, offset, returned: page.length, truncated: rows.length >= CAP, domains: page });
+  }
   if (wantCount) {
     const c = await env.DB.prepare("SELECT COUNT(*) n FROM domains WHERE " + where).bind(...binds).first();
     return json({ ok: true, type, region: region || "all", count: c ? c.n : 0 });
@@ -601,8 +617,7 @@ async function apiDomains(env, url) {
   // enrich each row with a name-derived business category (zero DB cost — regex on domain+business).
   // powers the "organize clean sites by category" view without a write-per-clean-domain.
   for (const r of rows) r.category = bizType(r.domain, "", r.business || "");
-  const filtered = biz ? rows.filter((r) => r.category === biz) : rows;
-  return json({ ok: true, type, region: region || "all", count: filtered.length, offset, domains: filtered });
+  return json({ ok: true, type, region: region || "all", count: rows.length, offset, returned: rows.length, domains: rows });
 }
 // apiSpamHosts — the self-learned spam-host blocklist (detector layer L45KNOWNHOST).
 // Injection campaigns reuse the same delivery hosts across hundreds of victims, so a host already seen on
@@ -662,10 +677,22 @@ async function apiLeads(env, url) {
   }
   if (cat) { sql += " AND category=?"; binds.push(cat); }
   if (biz) { sql += " AND biz_type=?"; binds.push(biz); }
+  // Server-side `status` predicate. Without it the review tab could only filter client-side inside whatever
+  // `ts DESC LIMIT 500` happened to return — a ~10-hour window that contained ZERO adult rows, so the tab
+  // rendered nothing while 10,259 findings waited and 1,117 gambling findings had no approval path at all.
+  // A bigger limit could never fix that; it needed to be a WHERE clause.
+  const status = url.searchParams.get("status");
+  if (status) { sql += " AND status=?"; binds.push(status); }
+  // `total` lets the client page instead of guessing. The old dashboard asked for limit=3000 every 30s and
+  // silently truncated everything downstream — list, badges, gallery AND exports — once the corpus passed it.
+  const countSql = "SELECT COUNT(*) n FROM (" + sql + ")";
   sql += " ORDER BY ts DESC LIMIT ? OFFSET ?";
+  const totalRow = await env.DB.prepare(countSql).bind(...binds).first();
   binds.push(limit, offset);
   const rs = await env.DB.prepare(sql).bind(...binds).all();
-  const body = { ok: true, leads: rs.results || [], limit, offset, slim };
+  const rows = rs.results || [];
+  const total = totalRow ? totalRow.n : rows.length;
+  const body = { ok: true, leads: rows, limit, offset, slim, total, returned: rows.length, hasMore: offset + rows.length < total };
   LEADS_CACHE[ck] = { ts: nowSec(), body };
   return json(body);
 }
