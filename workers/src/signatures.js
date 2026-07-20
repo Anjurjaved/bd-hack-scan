@@ -2,9 +2,18 @@
 // ONE source of truth for the Cloudflare-Worker scanner. STRONG = unambiguous spam,
 // WEAK = generic English (needs corroboration). Case-insensitive over decoded text.
 
-const GAMB_STRONG = String.raw`kasino|kasyno|kasyna|cazino|cassino|casin[oò]|kazino|казино|ставки на спорт|赌场|赌博|博彩|网赌|娱乐城|百家乐|太阳城|菠菜|六合彩|彩票|카지노|바카라|먹튀|토토사이트|토토|슬롯|คาสิโน|บาคาร่า|สล็อต|เว็บพนัน|แทงบอล|カジノ|オンラインカジノ|パチンコ|ブックメーカー|\bjudi\b|judi online|judi bola|situs judi|situs slot|situs toto|slot online|slot gacor|slot-gacor|slot88|slot777|slot deposit|mpo slot|qq ?slot|pkv games|\bpkv\b|togel|toto macau|toto hk|toto sgp|toto sdy|toto 4d|bandar togel|bandar judi|bandar bola|\bgacor\b|maxwin|rtp slot|rtp live|sbobet|bocoran|taruhan|link alternatif|deposit pulsa|bonus new member|scatter hitam|daftar slot|link slot|sabung ayam|\bsabong\b|mahjong ways|gates of olympus|pragmatic play|pg ?soft|joker123|918kiss|pussy888|mega888|maxbet|\bbahis\b|bahsegel|bahis siteleri|bahis giriş|casino siteleri|\bbettilt\b|apuestas deportivas|apostas esportivas|tragamonedas|tragaperras|caça-níqueis|scommesse|nhà cái|nha cai|nổ hũ|\bno hu\b|đá gà|\bda ga\b|cá cược|\bca cuoc\b|सट्टा|कैसीनो|जुआ|1xbet|melbet|betwinner|betvisa|\bpin-?up\b|parimatch|mostbet|4rabet|babu ?88|baji ?(live|88|999|bet|bd)|bajilive|krikya|jeetbuzz|jeetwin|jaya9|nagad88|glory casino|marvelbet|mcw casino|crickex|linebet|9wickets|rajabets|bet365|betobet|vavada|1win|bbrbet`;
+// Gambling tokens stay UNGUARDED on purpose: spam compounds them in a dozen languages (vipcasino, mondcasino,
+// yasscasino, nettikasinot, kazinolar) and a left guard measurably lost 6 real hacked BD sites, including
+// kgh.gov.bd. The only measured collision in the whole corpus is MOCASSINO (a shoe), so exclude exactly that.
+const GAMB_STRONG = String.raw`kasino|kasyno|kasyna|cazino|(?<!mo)cassino|casin[oò]|kazino|казино|ставки на спорт|赌场|赌博|博彩|网赌|娱乐城|百家乐|太阳城|菠菜|六合彩|彩票|카지노|바카라|먹튀|토토사이트|토토|슬롯|คาสิโน|บาคาร่า|สล็อต|เว็บพนัน|แทงบอล|カジノ|オンラインカジノ|パチンコ|ブックメーカー|\bjudi\b|judi online|judi bola|situs judi|situs slot|situs toto|slot online|slot gacor|slot-gacor|slot88|slot777|slot deposit|mpo slot|qq ?slot|pkv games|\bpkv\b|togel|toto macau|toto hk|toto sgp|toto sdy|toto 4d|bandar togel|bandar judi|bandar bola|\bgacor\b|maxwin|rtp slot|rtp live|sbobet|bocoran|taruhan|link alternatif|deposit pulsa|bonus new member|scatter hitam|daftar slot|link slot|sabung ayam|\bsabong\b|mahjong ways|gates of olympus|pragmatic play|pg ?soft|joker123|918kiss|pussy888|mega888|maxbet|\bbahis\b|bahsegel|bahis siteleri|bahis giriş|casino siteleri|\bbettilt\b|apuestas deportivas|apostas esportivas|tragamonedas|tragaperras|caça-níqueis|scommesse|nhà cái|nha cai|nổ hũ|\bno hu\b|đá gà|\bda ga\b|cá cược|\bca cuoc\b|सट्टा|कैसीनो|जुआ|1xbet|melbet|betwinner|betvisa|\bpin-?up\b|parimatch|mostbet|4rabet|babu ?88|baji ?(live|88|999|bet|bd)|bajilive|krikya|jeetbuzz|jeetwin|jaya9|nagad88|glory casino|marvelbet|mcw casino|crickex|linebet|9wickets|rajabets|bet365|betobet|vavada|1win|bbrbet`;
 const GAMB_WEAK = String.raw`\bcasino\b|\bpoker\b|\bbetting\b|\bslots\b|gambling|jackpot|\bbaccarat\b|\broulette\b|sportsbook|wagering|sweepstakes|\bbet now\b`;
-const PHARMA_STRONG = String.raw`kamagra|sildenafil|tadalafil|vardenafil|lovegra|\bviagra\b|\bcialis\b|\blevitra\b|伟哥|comprar viagra|generic viagra|buy viagra|cheap cialis|farmacia online`;
+// `\b` is ASCII-only: JS treats `é` as a NON-word char, so `spé|cialis|é` has a word boundary on both sides and
+// `\bcialis\b` matched "spécialisé". That published 14 French SMBs (borney.fr, korian.com, esf-valthorens.com …)
+// as hacked pharma sites. `(?<![\p{L}\p{N}])` is a real letter guard — it blocks the token appearing as the TAIL
+// of a longer word (spécialisé, specialist, socialist, commercialisation) with the `u` flag on RE.PHARMA_STRONG.
+// Guard the LEFT only: spam inflects to the right (buy-cialis-online, cialiswomen) and a right guard would lose it.
+const LG = String.raw`(?<![\p{L}\p{N}])`;
+const PHARMA_STRONG = String.raw`kamagra|sildenafil|tadalafil|vardenafil|lovegra|${LG}viagra|${LG}cialis|${LG}levitra|伟哥|comprar viagra|generic viagra|buy viagra|cheap cialis|farmacia online`;
 const PHARMA_WEAK = String.raw`erectile dysfunction|\bed pills\b|penis enlargement`;
 const ADULT_STRONG = String.raw`\bbokep\b|\bhentai\b|av女优|福利视频|情色片|\bporn\b|pornhub|xvideos|\bxnxx\b|\bsikiş\b|\bsikis\b`;
 const ADULT_WEAK = String.raw`\bescort\b|\bxxx\b|sex video|sex tube|escort service`;
@@ -12,12 +21,28 @@ const ADULT_WEAK = String.raw`\bescort\b|\bxxx\b|sex video|sex tube|escort servi
 export const RE = {
   GAMB_STRONG: new RegExp(GAMB_STRONG, "i"),
   GAMB_WEAK: new RegExp(GAMB_WEAK, "i"),
-  PHARMA_STRONG: new RegExp(PHARMA_STRONG, "i"),
+  PHARMA_STRONG: new RegExp(PHARMA_STRONG, "iu"),   // `u` is REQUIRED — without it \p{L} is read literally
   ADULT_STRONG: new RegExp(ADULT_STRONG, "i"),
-  DEFACE: /hacked by|defaced by|h4cked|\bhak3d\b|pwned by|owned by .{0,20}team|greetz to|defacer\.id|gantengers|was here by/i,
+  // `owned by .{0,20}team` produced only false positives and no true ones: it is ordinary product prose —
+  // "of updates owned by the content team" (sanity.io), "owned by a single, small team" (microservices.io),
+  // "owned by a centralized team" (payscale.com). Defacers write "Hacked By"/"Owned By <handle>", not "team".
+  DEFACE: /hacked by|defaced by|h4cked|\bhak3d\b|pwned by|greetz to|defacer\.id|gantengers|was here by/i,
   // L14CAMPAIGN — ONLY near-zero-FP malware infra/campaign markers (benign currentScript.remove
   // + bare eval() removed; those false-confirmed clean sites like proshikkhon.com).
-  MALJS: /defacer\.id|cdn-fileserver\.com|l\.cdn-fileserver|jso\.[a-z0-9.]+\.id|if\(ndsw|[;{ ]ndsw[ =.:]|\bndsx\b|\bndsj\b|COOKIE_ANNOT/i,
+  // `cdn-fileserver.com|l.cdn-fileserver` REMOVED 2026-07-20. It is not malware — it is a domain-parking /
+  // traffic-monetization network, and it accounted for 971 of the 973 confirmed `malware` leads (the other 2 are
+  // genuine `ndsx`). Sampled survivors all serve one 472-byte interstitial that window.location.replace()s to a
+  // Joken-JWT bounce; ~30 of 42 were already dead. A parked domain has no owner to sell a cleanup to, so every
+  // one of those leads was unsellable, and 778 of them were foreign — the single biggest drag on the BD share.
+  // It now matches PARKED below, which routes to park (pass_no=9000) instead of publishing a lead.
+  MALJS: /defacer\.id|jso\.[a-z0-9.]+\.id|if\(ndsw|[;{ ]ndsw[ =.:]|\bndsx\b|\bndsj\b|COOKIE_ANNOT/i,
+  // Domain-parking / expired-domain monetization. NOT a hack and NOT a customer: there is no business behind it.
+  // Unambiguous parking infrastructure — a real business page never carries these.
+  PARKED: /cdn-fileserver\.com|l\.cdn-fileserver|\/__media__\/|parkingcrew|sedoparking|bodis\.com|above\.com\/park|dan\.com\/buy-domain|afternic|hugedomains|domainmarket\.com|this domain (?:is|may be) for sale|buy this domain/i,
+  // A bare JS bounce with a tracking query is the OTHER half of the same network, but the shape alone is not
+  // proof — a legitimate site can redirect in JS. scan.js only trusts this one on a near-empty page (the measured
+  // interstitials are 472-478 bytes), which is what makes it safe to act on.
+  PARK_BOUNCE: /window\.location\.replace\(['"]https?:\/\/[^'"]*[?&](?:ch|sid|js)=/i,
   WAF: /Just a moment\.\.\.|Checking your browser before|challenges\.cloudflare\.com|cf-browser-verification|_cf_chl_opt|Verifying you are human|Enable JavaScript and cookies to continue|sucuri_cloudproxy|Incapsula incident ID|ddos-guard/i,
   JUNKTLD: /\.(ru|cn|tk|ml|ga|cf|gq|top|xyz|icu|club|cyou|sbs|monster|men|loan)([/:?#]|$)/i,
   SLUG_SPAM: /situs|\bjudi\b|togel|\bgacor\b|maxwin|sbobet|\bpkv\b|slot-?(gacor|online|88|777|deposit)|sabung-?ayam|918kiss|pussy888|mega888|mahjong-?ways|pragmatic-?play|joker123|toto-?(macau|hk|sgp|4d|sdy)/i,
@@ -47,10 +72,10 @@ export const RE = {
 export const REG = {
   GAMB_STRONG: new RegExp(GAMB_STRONG, "gi"),
   GAMB_WEAK: new RegExp(GAMB_WEAK, "gi"),
-  ALL_STRONG: new RegExp(`(?:${GAMB_STRONG})|(?:${PHARMA_STRONG})|(?:${ADULT_STRONG})`, "gi"),
+  ALL_STRONG: new RegExp(`(?:${GAMB_STRONG})|(?:${PHARMA_STRONG})|(?:${ADULT_STRONG})`, "giu"),
   ALL_WEAK: new RegExp(`(?:${GAMB_WEAK})|(?:${PHARMA_WEAK})|(?:${ADULT_WEAK})`, "gi"),
 };
-export const ALL_STRONG = new RegExp(`(?:${GAMB_STRONG})|(?:${PHARMA_STRONG})|(?:${ADULT_STRONG})`, "i");
+export const ALL_STRONG = new RegExp(`(?:${GAMB_STRONG})|(?:${PHARMA_STRONG})|(?:${ADULT_STRONG})`, "iu");
 
 export function categoryOf(text) {
   if (RE.GAMB_STRONG.test(text) || RE.GAMB_WEAK.test(text)) return "gambling";

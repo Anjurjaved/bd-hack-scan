@@ -39,6 +39,30 @@ export function hasCustomer(reg, sc) {
   return !!biz && biz !== "general-business";
 }
 
+// weakOnly — is the ONLY spam evidence a bare generic English word?
+//
+// GAMB_WEAK is `\bcasino\b|\bpoker\b|\bslots\b|jackpot|sweepstakes|…` — ordinary English that any real business
+// writes. Measured 2026-07-20: 329 confirmed leads had a single bare weak token as their ENTIRE proof (slots 117,
+// casino 44, jackpot 20 …) and the AI approved 239 of them as `hacked_client`. What it actually matched:
+//   xiclass.bd                 the national HSC admission portal — "use all 10 slots with a mix of colleges"
+//   sandbox.fhir.dghs.gov.bd   a Ministry of Health FHIR API — "Appointment-slot", "The slots that this…"
+//   olt.beeonline.com.bd       a minified Vue.js runtime — this.$slots.default, $scopedSlots
+//   doctorbari.com.bd / crx.bd appointment booking — "check available time slots"
+//   egallery.com.bd            "Jackpot Automatic Dry Iron" — Jackpot is a BD iron brand
+// Publishing a government admission portal as a hacked gambling site is a reputational hazard, not a bad lead.
+// The AI cannot save us here: it is shown the same weak token and agrees. So this is a hard structural gate —
+// a lone weak token can flag a site for review, but it can never on its own confirm one.
+const STRONG_EV = new Set([
+  "L1KW_STRONG", "L11REST", "L11SITEMAP", "L17HIDDEN", "L2UACLOAK", "L3REFCLOAK", "L14CAMPAIGN", "L10DEFACE",
+  "L8IFRAME", "L20SCRIPT", "L17HIDDEN2", "L54SLUGSPAM", "L55BNSPAM", "L56FAMILY", "L32FOREIGNSLUG", "L35ROBOTSPAM",
+  "L29FEEDFOREIGN", "L30WPSEARCH", "L52DOORBODY", "L47URLCLOAK", "L51PARAMCLOAK",
+]);
+export function weakOnly(sc) {
+  const L = (sc && sc.layers) || [];
+  if (!L.includes("L1KW_WEAK")) return false;
+  return !L.some((l) => STRONG_EV.has(l));
+}
+
 // adultNeedsReview — the last line, and the one that does not depend on vocabulary.
 //
 // Measured on the 56: no keyword rule closes this category. The residue that beats every list is titled
@@ -85,7 +109,12 @@ function getTitle(h) {
   return m ? m[1].replace(RE_WS, " ").trim().slice(0, 120) : "";
 }
 function distinct(text, src) {
-  const rx = new RegExp(src, "gi");
+  // Callers pass `.source` (a bare pattern string), which drops the original regex's flags. PHARMA_STRONG's letter
+  // guard is `(?<![\p{L}\p{N}])`, and WITHOUT `u` that is parsed as a literal character class of `p{LN}\` — so the
+  // guard silently inverts into "match anything not one of those punctuation chars" and `spécialisé` matched again.
+  // Rebuilding with `u` whenever the pattern uses a Unicode property escape keeps every call site correct at once
+  // (scan.js has 5, layers/cloak.js and layers/hidden.js reach the same helper through ctx.distinct).
+  const rx = new RegExp(src, /\\[pP]\{/.test(src) ? "giu" : "gi");
   const out = new Set();
   let m;
   let guard = 0;
@@ -98,8 +127,16 @@ function hostOf(url) {
   s = s.replace(/\/.*$/, "").replace(/:.*$/, "");
   return s;
 }
+// Same ORGANISATION, not same hostname. `reg` here is only `domain` minus a leading `www.`, i.e. still a host —
+// so the old host-equality test called every subdomain→apex and subdomain→sibling hop a foreign redirect:
+// sandbox.sslcommerz.com → developer.sslcommerz.com, mail.udoi.org.bd → udoi.org.bd, jobs.bdjobs.com → bdjobs.com.
+// That is the whole redirect review flood: ~8,000 rows, +600/day, essentially all of it redirect-family layers
+// with no spam corroboration at all. registrableOf() (signatures.js) already existed for the org rollup and
+// handles multi-part suffixes (.com.bd, .gov.bd) and multi-tenant hosts; it was simply never used here.
 function sameHost(host, reg) {
-  return host === reg || host.endsWith("." + reg);
+  if (host === reg || host.endsWith("." + reg)) return true;
+  const a = S.registrableOf(host), b = S.registrableOf(reg);
+  return !!a && a === b;
 }
 
 // 170KB → 96KB cap. On the FREE plan the 1102 is a CPU wall, and regex over the page body is the #1 CPU cost;
@@ -383,9 +420,19 @@ function score(signals, ctx) {
   for (const k in best) lo += Math.log(best[k][0]);
   const posterior = 1 / (1 + Math.exp(-lo));
   const nbuckets = Object.keys(best).length;
+  // A redirect, on its own, is not evidence of a hack — it is how the web works. `nbuckets >= 1` below turns ANY
+  // single signal into SUSPECT, i.e. a row in the human review queue, and the redirect family alone produced
+  // ~8,000 of the 10,257 rows there (+600/day), drowning 1,117 gambling and 170 hard-evidence BD findings that a
+  // human should actually be looking at. Every one of those redirect rows was a site moving between its own
+  // hosts, an hreflang alternate, a rebrand or a parking hop. So: redirect-family layers must be corroborated by
+  // something that is actually about spam before they cost anyone attention. L16HDR is exempt — it only fires
+  // when the redirect TARGET already matched GAMB_STRONG or a junk TLD, so it carries its own corroboration.
+  const REDIR_FAMILY = new Set(["L9REDIR", "L20RELAY", "L4MOBILE", "L21HOPS", "L22META", "L22METAX", "L23JSLOC", "L23JSOBF", "L23JSTLD"]);
+  const redirectOnly = eff.length > 0 && eff.every((s) => REDIR_FAMILY.has(s.layer));
   let verdict;
   if (!eff.length) verdict = "CLEAN";
   else if (hard || (posterior >= 0.97 && nbuckets >= 2)) verdict = "CONFIRM_CANDIDATE";
+  else if (redirectOnly) verdict = "CLEAN";
   else if (posterior >= 0.50 || nbuckets >= 1) verdict = "SUSPECT";
   else verdict = "CLEAN";
 
@@ -479,8 +526,14 @@ export async function scanDomain(env, rec, deadline) {
     base = R.base;
     B = { status: R.status, finalUrl: R.finalUrl, text: R.text, headers: R.headers, chain: R.chain };
   } else {
+    // The shards cannot afford the full ladder under the free-plan CPU wall, but condemning a domain on ONE
+    // un-retried https attempt is what put 71,939 rows (37% of the corpus) behind dead=1. A fresh 50-row probe
+    // found 52% of them answering today, and 3 of the 20 that returned 200 did so ONLY over http:// —
+    // hnhs.edu.bd, jhapuaaidmad.edu.bd, shkhs.edu.bd. Sites with expired or absent TLS are precisely the
+    // neglected ones most likely to be compromised, so this single extra fetch is the cheapest recall we have.
     base = "https://" + d;
     B = await fetchPage(base, UA_BR, null);
+    if (B.status === 0 && !overBudget()) { base = "http://" + d; B = await fetchPage(base, UA_BR, null); }
     if (B.status === 0) return { error: "unreachable" };
   }
   const G = await fetchPage(base, UA_GB, REF_G);
@@ -531,7 +584,9 @@ export async function scanDomain(env, rec, deadline) {
   // L20RELAY — off-domain canonical/alternate to a non-CDN/non-platform host (from googlebot body)
   const relaySkip = /cloudflare|cloudfront|akamai|fastly|jsdelivr|gstatic|googleusercontent|bunny|wp\.com|w\.org|gravatar|youtube|facebook|googleapis|lovable|webflow|wixsite|weebly|netlify|vercel|github\.io|blogspot|myshopify/i;
   const relays = [];
-  const relayRx = /<link[^>]+rel="(?:alternate|canonical)"[^>]+href="https?:\/\/([^/"]+)/gi;
+  // `[^/"]+` did not stop at `?` or `#`, so a canonical carrying a query yielded "hosts" like
+  // `borendroonline.net?post_type=…` which can never equal `reg` — an automatic L20RELAY on the site's own domain.
+  const relayRx = /<link[^>]+rel="(?:alternate|canonical)"[^>]+href="https?:\/\/([^/"?#]+)/gi;
   let rm, rg = 0;
   while ((rm = relayRx.exec(G.text)) && rg++ < 10) {
     const h = rm[1].toLowerCase();
@@ -681,6 +736,12 @@ export async function scanDomain(env, rec, deadline) {
   sc.title = ttl;
   sc.excerpt = visB.slice(0, 1800);
   sc.httpStatus = B.status;
+  // PARKED — a domain-parking / expired-domain monetization page. This is neither a hack nor a customer: there is
+  // no owner behind it to sell a cleanup to. It is computed here, on the RAW body (the marker usually lives in a
+  // <script>, so the visible text cannot see it), because BOTH decision paths — scanSlice and scanOneVerified —
+  // must apply it, and the 2026-07-16 lesson was that a gate living in only one of them is not a gate.
+  // Measured impact: 971 of 973 confirmed `malware` leads were this one network (l.cdn-fileserver), 778 foreign.
+  sc.parked = S.RE.PARKED.test(B.text) || (S.RE.PARK_BOUNCE.test(B.text) && (B.text || "").length < 2000);
   // Resolve the hosting IP ONCE for flagged sites — feeds the accurate BD-by-IP test AND is stored on
   // the finding (so the dashboard's server-cluster view works from scan-time, no separate backfill).
   let hostingIp = "";
@@ -875,6 +936,9 @@ export async function scanSlice(env, n) {
       continue;
     }
     let status = sc.status, confirmed = sc.confirmed, verdict = sc.verdict, reason = `posterior=${sc.posterior} buckets=${sc.nbuckets}${sc.hard ? " HARD" : ""}`, biz = sc.bizType;
+    // PARKING GATE — before the AI, so a parked domain costs zero Gemini. Applies to EVERY category: `malware`
+    // never reached the AI at all, which is how 971 parked domains became "malware leads".
+    if (sc.parked) { parked.push(r.rowid); clear(r, sc); continue; }
     if (["gambling", "adult", "foreign_lang"].includes(sc.category)) {
       // 1) gambling/adult BRAND in the domain NAME → genuine spam → park, spend NO Gemini.
       if (S.domainSpammy(reg)) { parked.push(r.rowid); clear(r, sc); continue; }
@@ -909,6 +973,14 @@ export async function scanSlice(env, n) {
     // it walked through into the lead list. Reuses the SAME narrow high-precision brand list as the GA branch above,
     // so it adds ZERO new false-positive surface for real BD businesses (no Bangla/leet tokens are involved here).
     if (S.domainSpammy(reg)) { parked.push(r.rowid); clear(r, sc); continue; }
+    // WEAK-TOKEN GATE — deliberately the LAST word, after the AI branch above has had its say. A positive
+    // `hacked_client` must not be able to promote a lone generic English word: the AI approved 239 of these,
+    // including the national HSC admission portal and a Ministry of Health API. Demote to review, never drop —
+    // a genuinely injected site can still be confirmed by a human from the review tab.
+    if (confirmed && weakOnly(sc)) {
+      status = "review"; confirmed = 0; verdict = "weak-only";
+      reason = `only generic English vocabulary matched (${sc.proof || ""}) — needs human confirmation`;
+    }
     // (non-GA categories — malware/deface/cloak/redirect — reach here and push directly; they need no AI. A spam_site
     // is always flagged=false and was already handled by the !sc.flagged guard above, so no branch is needed here.)
     findings.push({ domain: r.domain, business: r.business, phone: r.phone || sc.contactPhone, category: sc.category, layers: sc.layers.join(","), proof: sc.proof, proofUrl: sc.proofUrl, httpStatus: sc.httpStatus, nbuckets: sc.nbuckets, verdict, reason, confirmed, evidence: sc.evidence, isBd: sc.isBd, bizType: biz, status, address: sc.address, district: sc.district, area: sc.area, ip: sc.ip });
@@ -1039,8 +1111,14 @@ export async function scanOneVerified(env, domain) {
   let reason = `posterior=${sc.posterior} buckets=${sc.nbuckets}${sc.hard ? " HARD" : ""}`;
   const reg = String(domain).replace(/^www\./, "");
   const isGA = ["gambling", "adult", "foreign_lang"].includes(sc.category);
+  // PARKING GATE — same as scanSlice, and it has to be the FIRST arm of this chain: as a standalone `if` it would
+  // be overwritten by the institutional/GA arms below.
+  if (sc.parked) {
+    status = "parked"; confirmed = 0; verdict = "parked-domain";
+    reason = "domain-parking / expired-domain monetization page — no owner to sell a cleanup to";
+  }
   // restricted BD institutional TLD (.gov/.edu/.ac/.mil.bd) + spam = always a hacked victim (flagged OR fully-defaced spam_site).
-  if (isGA && BD_INST_TLD.test(reg) && (sc.flagged || sc.status === "spam_site")) {
+  else if (isGA && BD_INST_TLD.test(reg) && (sc.flagged || sc.status === "spam_site")) {
     status = "lead"; confirmed = 1; verdict = "inst-hacked"; reason = "restricted BD institutional TLD + injected " + sc.category + " = hacked victim";
   } else if (sc.flagged && isGA) {
     if (S.domainSpammy(reg)) { status = "genuine_spam"; confirmed = 0; verdict = "spam-domain"; reason = "gambling/adult brand in the domain name — genuine spam, not a hacked victim"; }
@@ -1061,6 +1139,11 @@ export async function scanOneVerified(env, domain) {
         status = "review"; confirmed = 0; verdict = "needs-ai"; reason = "gambling/adult flagged — AI pool exhausted, pending verify";
       }
     }
+  }
+  // WEAK-TOKEN GATE — last word here too, for the same reason as in scanSlice.
+  if (confirmed && weakOnly(sc)) {
+    status = "review"; confirmed = 0; verdict = "weak-only";
+    reason = `only generic English vocabulary matched (${sc.proof || ""}) — needs human confirmation`;
   }
   return {
     domain, flagged: sc.flagged ? 1 : 0, confirmed: confirmed ? 1 : 0, category: sc.category || "",

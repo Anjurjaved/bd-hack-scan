@@ -19,6 +19,14 @@ const BATCH = Math.max(1, Number(process.env.BATCH || 500));
 const DOMAIN_MS = Number(process.env.DOMAIN_MS || 30000);
 const IDLE_MS = Number(process.env.IDLE_MS || 15000);
 const PUSH_CHUNK = 300;   // findings per /vm-push (keep the Worker's D1 batch small)
+// Watchdog thresholds. On 2026-07-20 this process sat in the pull loop for hours logging "queue empty" while
+// /vm-pull, curl'd from this very box with this very token, answered 200 with 240 domains in 1.5s — api() was
+// failing and returning null, which main() could not tell apart from a drained queue. It never exits, so
+// Restart=always never fires. Both counters below end that: a persistent pull failure, or an "empty" queue that
+// cannot be empty (tier 5 of vmPull always has rows while the corpus is non-empty), now exit non-zero so systemd
+// hands us a clean process. Restarting is free — every row is pre-marked server-side, so nothing is lost.
+const PULL_FAIL_MAX = Number(process.env.PULL_FAIL_MAX || 5);    // consecutive transport failures
+const EMPTY_MAX = Number(process.env.EMPTY_MAX || 20);           // consecutive genuinely-empty pulls (~5 min)
 
 // scan.js reads Gemini/Groq keys off this env object (same shape as the Worker's env binding).
 const ENV = {
@@ -36,23 +44,47 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const nowMs = () => Date.now();
 let scannedTotal = 0, confirmedTotal = 0, startTs = nowMs();
 
+// Returns the parsed body, or null after `tries` failures. The null is now LOUD: every caller that treats it as
+// "no data" must be able to say so in the log, because the silent version of this cost a full day of deep scanning.
 async function api(path, body, tries = 4) {
+  let last = "";
   for (let i = 0; i < tries; i++) {
     try {
       const r = await fetch(API_BASE + path, { method: "POST", headers: HDR, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) });
       if (r.ok) return await r.json();
       if (r.status === 401) { console.error("AUTH FAILED — check SHARED_TOKEN"); process.exit(1); }
-    } catch (e) { /* transient — retry */ }
+      last = `HTTP ${r.status}`;
+    } catch (e) {
+      last = `${e.name}: ${e.message}${e.cause && e.cause.code ? ` (${e.cause.code})` : ""}`;
+    }
     await sleep(1500 * (i + 1));
   }
+  console.error(`[bd-scanner] api ${path} FAILED after ${tries} tries — last error: ${last}`);
   return null;
 }
 
 // EXACT replica of scanSlice()'s per-domain decision (workers/src/scan.js). Returns {rowid, finding?, dead?, error?}.
+// The deadline handed to scanDomain is advisory — every layer checks it voluntarily, so one that awaits something
+// which never settles (a socket the kernel never times out, an AI call with no abort) stalls its runPool worker
+// forever, and runPool cannot finish while any worker is outstanding. That is a whole-batch deadlock from a single
+// domain. This makes the cap enforceable rather than cooperative.
+function withDeadline(p, ms, label) {
+  let t;
+  return Promise.race([
+    p,
+    new Promise((_, rej) => { t = setTimeout(() => rej(new Error(`deadline ${ms}ms exceeded in ${label}`)), ms); }),
+  ]).finally(() => clearTimeout(t));
+}
+
 async function scanOne(rec) {
   let sc;
-  try { sc = await scanDomain(ENV, rec, nowMs() + DOMAIN_MS); } catch (e) { return { rowid: rec.rowid, error: true }; }
-  const r = await decide(rec, sc);
+  // 2× DOMAIN_MS: the cooperative deadline should always win, so reaching this one is itself the anomaly.
+  try { sc = await withDeadline(scanDomain(ENV, rec, nowMs() + DOMAIN_MS), DOMAIN_MS * 2, "scanDomain"); }
+  catch (e) { return { rowid: rec.rowid, error: true }; }
+  // decide() can reach Gemini/Groq, which is network the same way the scan is. Same reasoning as above.
+  let r;
+  try { r = await withDeadline(decide(rec, sc), 120000, "decide"); }
+  catch (e) { return { rowid: rec.rowid, error: true }; }
   // The fingerprint rides along on EVERY outcome, not just findings. Its whole purpose is to notice the pass
   // where a previously-clean site changes, so a clean scan is precisely the one that must record a baseline.
   if (r && sc && sc.fp) { r.fp = sc.fp; r.base = sc.base || ""; }
@@ -207,13 +239,33 @@ async function main() {
   if (!TOKEN) { console.error("SHARED_TOKEN missing"); process.exit(1); }
   await refreshSpamHosts();
   setInterval(refreshSpamHosts, 6 * 3600 * 1000).unref?.();
-  let emptyStreak = 0;
+  let emptyStreak = 0, failStreak = 0;
   for (;;) {
     const pulled = await api("/vm-pull", { n: BATCH });
-    const batch = (pulled && pulled.domains) || [];
+    // A transport failure and a drained queue used to be the same line in this log. They are not the same event:
+    // one means the server has no work, the other means WE are broken. Only the second is worth restarting for.
+    if (!pulled) {
+      failStreak++;
+      console.error(`[bd-scanner] /vm-pull unreachable (${failStreak}/${PULL_FAIL_MAX}) — this is a FAILURE, not an empty queue`);
+      if (failStreak >= PULL_FAIL_MAX) {
+        console.error("[bd-scanner] pull failing persistently — exiting so systemd restarts a clean process");
+        process.exit(1);
+      }
+      await sleep(IDLE_MS);
+      continue;
+    }
+    failStreak = 0;
+    const batch = pulled.domains || [];
     if (!batch.length) {
       emptyStreak++;
       console.log(`[bd-scanner] queue empty (${emptyStreak}) — sleeping ${IDLE_MS}ms`);
+      // vmPull's last tier is a least-recently-scanned rotation over the whole corpus, so a truly empty answer is
+      // only possible on an empty database. Sustained emptiness means the process is wedged in some way the
+      // failure counter above cannot see — restart rather than idle forever.
+      if (emptyStreak >= EMPTY_MAX) {
+        console.error(`[bd-scanner] queue reported empty ${emptyStreak}× — impossible against a non-empty corpus; restarting`);
+        process.exit(1);
+      }
       await sleep(IDLE_MS);
       continue;
     }
