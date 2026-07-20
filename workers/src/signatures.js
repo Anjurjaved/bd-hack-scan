@@ -59,6 +59,48 @@ export function categoryOf(text) {
   return "";
 }
 
+// ---- registrable domain (the ORGANISATION behind a host) ----
+// Six compromised hosts under buet.ac.bd are one hacked customer, not six leads. Everything that counts,
+// displays or exports a lead groups on this, so BUET is contacted once with a list of its affected hosts
+// instead of appearing six times in the gallery.
+// A plain "last two labels" split is wrong for Bangladesh: it would turn buet.ac.bd into the meaningless
+// "ac.bd" and merge every unrelated .edu.bd school into one giant fake organisation.
+// The BD suffixes that matter here are listed, plus a general rule for everyone else. Enumerating suffixes country by
+// country does not survive contact with a corpus this wide — a first pass that listed only the BD and a few
+// UK/AU forms collapsed 110 unrelated Japanese sites into a single "co.jp" organisation and 30 into "co.kr".
+// The rule below generalises it: under a two-letter ccTLD, a second level drawn from the standard registry
+// vocabulary (co/com/ac/edu/go/gov/ne/net/or/org/…) is an administrative label, never a business, so the
+// organisation is one label further left. Getting this wrong in the SPLITTING direction merely shows two cards
+// where one would do; getting it wrong in the MERGING direction fuses unrelated businesses into one lead, so
+// the rule is deliberately biased towards splitting.
+const REGISTRY_SLD = new Set("co com net org edu ac gov go gob gouv gc mil or ne ad gr sch nic res ind firm gen info biz tv id lg ed ltd plc me".split(" "));
+const PUBLIC_SUFFIX = new Set(["com.bd", "net.bd", "org.bd", "edu.bd", "ac.bd", "gov.bd", "mil.bd", "info.bd", "tv.bd"]);
+// Multi-tenant platforms: shop-a.myshopify.com and shop-b.myshopify.com are two unrelated businesses, so here
+// the FULL host is the organisation. Without this, every blogspot site in the corpus rolls into one "blogspot.com"
+// lead — the same over-merge as co.jp, just wearing a gTLD.
+const PLATFORM = new Set([
+  "blogspot.com", "wordpress.com", "wixsite.com", "weebly.com", "webflow.io", "myshopify.com", "tumblr.com",
+  "medium.com", "github.io", "gitlab.io", "netlify.app", "vercel.app", "pages.dev", "workers.dev", "herokuapp.com",
+  "firebaseapp.com", "web.app", "glitch.me", "repl.co", "surge.sh", "neocities.org", "facebook.com", "sites.google.com", "websites.co.in", "blogspot.com.bd",
+  // Second wave — every one of these is present in the corpus with MULTIPLE unrelated Bangladeshi tenants under
+  // it, so the generic last-two-labels fallback was fusing them into one fake organisation: a dental clinic, a
+  // chamber of commerce and an agency all became the single lead "business.site". Same over-merge as co.jp.
+  "business.site", "godaddysites.com", "hostingersite.com", "webs.com", "yolasite.com", "epizy.com",
+  "pantheonsite.io", "engaze.ai", "cpanel.site", "duckdns.org", "builder-preview.com", "website3.me",
+  "worldplaces.me", "my.id", "bd.luxury", "pl.ua",
+]);
+export function registrableOf(host) {
+  const h = String(host || "").toLowerCase().trim().replace(/^www\./, "").replace(/\.+$/, "");
+  const p = h.split(".");
+  if (p.length <= 2) return h;
+  for (let i = 2; i <= 3 && i < p.length; i++) {
+    if (PLATFORM.has(p.slice(-i).join("."))) return h;   // tenant of a shared platform → the host stands alone
+  }
+  const [sld, tld] = p.slice(-2);
+  const isSuffix = PUBLIC_SUFFIX.has(sld + "." + tld) || (tld.length === 2 && REGISTRY_SLD.has(sld));
+  return isSuffix ? p.slice(-3).join(".") : p.slice(-2).join(".");
+}
+
 export function domainSpammy(reg) {
   return RE.SPAMMY_DOMAIN.test(reg || "") || RE.SPAMMY_TLD.test(reg || "");
 }

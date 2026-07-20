@@ -11,20 +11,34 @@ if ! command -v node >/dev/null 2>&1 || [ "$(node -v | sed 's/v//;s/\..*//')" -l
     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
     sudo apt-get install -y nodejs
   else
-    curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo -E bash -
-    sudo dnf install -y nodejs || sudo yum install -y nodejs
+    # DELIBERATELY NOT dnf/yum. On the 946MB E2.1.Micro the dnf dependency solve alone OOM-kills the box and
+    # takes the running scanner down with it — that happened, and recovering it cost a reboot. The official
+    # prebuilt tarball is a plain extract: no solver, no compilation, a few hundred MB of disk and ~0 RAM.
+    ARCH="$(uname -m)"; case "$ARCH" in aarch64) NARCH=arm64 ;; x86_64) NARCH=x64 ;; *) echo "unsupported arch $ARCH"; exit 1 ;; esac
+    NVER=v20.20.2
+    curl -fsSL "https://nodejs.org/dist/$NVER/node-$NVER-linux-$NARCH.tar.xz" -o /tmp/node.tar.xz
+    sudo mkdir -p /opt/node && sudo tar -xJf /tmp/node.tar.xz -C /opt/node --strip-components=1
+    sudo ln -sf /opt/node/bin/node /usr/bin/node && sudo ln -sf /opt/node/bin/npm /usr/bin/npm
+    rm -f /tmp/node.tar.xz
   fi
 fi
 echo "[setup] node $(node -v)"
 echo "[setup] installing files to $DIR…"
-sudo mkdir -p "$DIR"
+sudo mkdir -p "$DIR" "$DIR/layers"
 sudo cp run.mjs scan.js signatures.js package.json scanner.env "$DIR"/
+# detector v2 layer modules — scan.js imports ./layers/*, so a scan.js copied without them will not start
+[ -d layers ] && sudo cp layers/*.js "$DIR/layers"/
+# VM-side harvesters (crt.sh, CrUX, CT tailing, …) — driven by their own systemd timers, not by run.mjs
+for h in harvest-*.mjs bdgate.mjs oci-a1-catcher.mjs; do [ -f "$h" ] && sudo cp "$h" "$DIR"/; done
 sudo chmod 600 "$DIR"/scanner.env
 echo "[setup] installing systemd service…"
 sudo cp bd-scanner.service /etc/systemd/system/bd-scanner.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now bd-scanner
-sleep 2
+sudo systemctl enable bd-scanner
+# `enable --now` does NOT restart a service that is already running, so a deploy would copy the new files and
+# leave the old process serving them — which has silently happened here before. Restart explicitly.
+sudo systemctl restart bd-scanner
+sleep 3
 echo "[setup] status:"
 sudo systemctl --no-pager status bd-scanner | head -8 || true
 echo ""

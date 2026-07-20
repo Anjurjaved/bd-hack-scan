@@ -11,7 +11,21 @@ import os
 import re
 import json
 import time
+import socket as _socket
 import urllib.request
+
+# This network reaches several BD directory hosts (bdtradeinfo, …) over a dead IPv6/NAT64 path —
+# raw connections hang in SYN_SENT until timeout — while IPv4 works in <1s. curl survives via Happy
+# Eyeballs (races v4+v6, keeps the winner); Python's urllib does NOT — it tries getaddrinfo's first
+# result (IPv6 here) and stalls. So force IPv4 when an A record exists (fall back if none). Toggle off
+# with HARVEST_IPV4_ONLY=0. Applies to every harvester that imports lib.
+_orig_getaddrinfo = _socket.getaddrinfo
+def _getaddrinfo_ipv4_first(host, port, family=0, *args, **kwargs):
+    res = _orig_getaddrinfo(host, port, family, *args, **kwargs)
+    v4 = [r for r in res if r[0] == _socket.AF_INET]
+    return v4 or res
+if os.environ.get("HARVEST_IPV4_ONLY", "1") != "0":
+    _socket.getaddrinfo = _getaddrinfo_ipv4_first
 
 try:
     import tldextract

@@ -128,6 +128,8 @@
   .shotimg .cat{position:absolute;left:8px;top:8px;z-index:2}
   .shotmeta{padding:9px 11px;display:flex;justify-content:space-between;gap:8px;align-items:center}
   .shotmeta .d{font-family:var(--fm);font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* "N হোস্ট" — this organisation has more than one compromised host rolled into the card */
+  .hostn{display:inline-block;flex:0 0 auto;font-size:10.5px;font-weight:700;color:var(--purple);background:color-mix(in srgb,var(--purple) 12%,transparent);border:1px solid color-mix(in srgb,var(--purple) 30%,transparent);border-radius:999px;padding:2px 7px;white-space:nowrap;vertical-align:middle}
   .modal .mshot{width:100%;border-radius:11px;border:1px solid var(--line);margin-bottom:13px;display:block;aspect-ratio:16/9;object-fit:cover;object-position:top center;background:var(--panel2)}
   @media(max-width:640px){.shotgrid{grid-template-columns:repeat(2,1fr);gap:9px;padding:11px}.shotcard{border-radius:11px}}
   .modal .mbody{flex:1 1 auto;min-height:0}
@@ -169,9 +171,84 @@
     .wrap{max-width:100%;padding:0} .panel{box-shadow:none;border:none}
     th{position:static}
   }
+  /* ============ v2 upgrades ============ */
+  /* impressive section divider */
+  .divider{display:flex;align-items:center;gap:14px;margin:22px 2px 15px}
+  .divider::before,.divider::after{content:"";height:1px;flex:1;background:linear-gradient(90deg,transparent,var(--line) 18%,var(--line) 82%,transparent)}
+  .divider .dl{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.2px;color:var(--ink);background:linear-gradient(135deg,#fff,var(--panel2));border:1px solid var(--line);border-radius:999px;padding:6px 15px;box-shadow:var(--sh);white-space:nowrap}
+  .divider .dl .di{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;color:#fff;margin:-2px 0 -2px -6px}
+  .divider .dl .di svg{width:14px;height:14px}
+  .divider .dl .n{font-family:var(--fb);color:var(--blue);font-weight:800}
+  .di-blue{background:linear-gradient(135deg,var(--blue),#3b8bff)} .di-red{background:linear-gradient(135deg,var(--red),#ff6376)}
+  .di-green{background:linear-gradient(135deg,var(--green),#34d39e)} .di-purple{background:linear-gradient(135deg,var(--purple),#9d5cff)}
+  .di-gold{background:linear-gradient(135deg,var(--gold),#f6c343)} .di-cyan{background:linear-gradient(135deg,var(--cyan),#26d8f2)}
+  /* redesigned server clusters */
+  .clsum{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;padding:12px 15px 4px}
+  .clsum .b{border:1px solid var(--line);border-radius:11px;padding:9px 12px;background:linear-gradient(135deg,#fff,var(--panel2))}
+  .clsum .b .v{font-size:17px;font-weight:800;font-family:var(--fb)} .clsum .b .l{font-size:10.5px;color:var(--muted)}
+  .cluster{border:1px solid var(--line);border-radius:15px;margin:0 15px 13px;overflow:hidden;background:var(--panel);box-shadow:var(--sh);transition:box-shadow .18s ease}
+  .cluster:hover{box-shadow:0 14px 34px rgba(16,39,64,.13)}
+  .cluster .ch{display:flex;align-items:center;gap:11px;padding:11px 14px;background:linear-gradient(135deg,#eef4fd,#e7eefb);border-bottom:1px solid var(--line);font-size:12.5px;flex-wrap:wrap}
+  .cluster .ch .srv{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--blue),var(--purple));display:grid;place-items:center;color:#fff;flex:0 0 auto;box-shadow:0 4px 11px rgba(0,102,255,.28)}
+  .cluster .ch .srv svg{width:17px;height:17px}
+  .cluster .ch .ipwrap{display:flex;flex-direction:column;line-height:1.32;min-width:0}
+  .cluster .ch .ip{font-family:var(--fm);font-weight:800;font-size:13.5px;color:var(--ink)}
+  .cluster .ch .meta{color:var(--muted);font-size:11px}
+  .cluster .ch .cnt{margin-left:auto;background:linear-gradient(135deg,var(--red),#ff6376);color:#fff;border-radius:999px;font-size:11px;font-weight:800;padding:4px 12px;font-family:var(--fb);box-shadow:0 3px 8px rgba(226,61,82,.3)}
+  .cluster .ch .minibar{flex-basis:100%;height:5px;border-radius:4px;background:var(--line);overflow:hidden;display:flex}
+  .cluster .ch .minibar i{height:100%;display:block}
+  .cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;padding:12px 14px}
+  .cdom{display:flex;align-items:center;gap:9px;justify-content:space-between;border:1px solid var(--line);border-radius:10px;padding:8px 11px;cursor:pointer;font-size:12px;background:var(--panel2);transition:border-color .14s,background .14s,transform .14s,box-shadow .14s}
+  .cdom:hover{background:#fff;border-color:var(--blue);transform:translateY(-1px);box-shadow:0 6px 14px rgba(16,39,64,.1)}
+  .cdom .dl2{display:flex;align-items:center;gap:8px;min-width:0}
+  .cdom .cdot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .cdom .d{font-family:var(--fm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* live process panel (zero extra API — derived from already-fetched stats+feed) */
+  .lp-now{display:flex;align-items:center;gap:13px;padding:13px 15px;border:1px solid var(--line);border-radius:13px;background:linear-gradient(135deg,#edfaf2,#eef5ff);margin-bottom:13px}
+  .lp-now .rad{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--green),#34d39e);display:grid;place-items:center;color:#fff;flex:0 0 auto;position:relative}
+  .lp-now .rad::after{content:"";position:absolute;inset:0;border-radius:12px;box-shadow:0 0 0 0 rgba(16,185,129,.5);animation:pulse 1.9s infinite}
+  .lp-now .rad.idle{background:linear-gradient(135deg,var(--orange),#ffa75c)} .lp-now .rad.idle::after{animation:none}
+  .lp-now .rad svg{width:20px;height:20px;position:relative;z-index:1}
+  .lp-now .txt b{font-size:14px;display:block} .lp-now .txt div{font-size:11.5px;color:var(--muted);margin-top:1px}
+  .lp-step{display:flex;gap:12px;align-items:flex-start;padding:0}
+  .lp-step .tl{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;align-self:stretch}
+  .lp-step .tl .d{width:11px;height:11px;border-radius:50%;border:2px solid var(--blue);background:#fff;margin-top:11px;flex:0 0 auto}
+  .lp-step .tl .ln{width:2px;flex:1;background:var(--line);min-height:8px}
+  .lp-step:last-child .tl .ln{display:none}
+  .lp-step.cur .tl .d{background:var(--green);border-color:var(--green);box-shadow:0 0 0 4px rgba(16,185,129,.16)}
+  .lp-step .bd2{flex:1;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)}
+  .lp-step:last-child .bd2{border-bottom:none}
+  .lp-step .bd2 .t{font-size:12.5px;font-weight:600} .lp-step .bd2 .t .src{color:var(--blue)} .lp-step .bd2 .s{font-size:11px;color:var(--muted);margin-top:1px}
+  .lp-step .age{font-family:var(--fb);font-size:10.5px;color:var(--muted);white-space:nowrap;flex:0 0 auto}
+  .lp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:9px;margin-bottom:13px}
+  .lp-stat{border:1px solid var(--line);border-radius:11px;padding:10px 12px;background:var(--panel2)}
+  .lp-stat .v{font-size:18px;font-weight:800;font-family:var(--fb);letter-spacing:-.3px} .lp-stat .l{font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:5px}
+  .lp-stat .l svg{width:12px;height:12px;color:var(--muted)}
+  /* shard fleet visual */
+  .fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:9px;padding:13px 15px}
+  .shard{border:1px solid var(--line);border-radius:11px;padding:10px 8px;text-align:center;background:linear-gradient(135deg,#fff,var(--panel2));position:relative;overflow:hidden}
+  .shard .si{width:26px;height:26px;border-radius:8px;margin:0 auto 6px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--blue),var(--purple))}
+  .shard .si svg{width:14px;height:14px}
+  .shard.live .si{background:linear-gradient(135deg,var(--green),#34d39e)}
+  .shard .nm{font-size:10.5px;font-weight:700} .shard .st{font-size:9.5px;color:var(--muted);margin-top:1px}
+  .shard.live::after{content:"";position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 1.8s infinite}
+  .sortsel{border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:11.5px;font-weight:600;color:var(--ink);background:var(--panel2);font-family:var(--f);cursor:pointer}
+  @media(max-width:640px){ .fleet{grid-template-columns:repeat(3,1fr)} .lp-grid{grid-template-columns:repeat(2,1fr)} .divider{margin:16px 2px 12px} }
 </style>
 </head>
 <body>
+<div id="authGate" style="display:none;position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0891b2,#0f172a);align-items:center;justify-content:center;font-family:'Hind Siliguri',system-ui,sans-serif">
+  <div style="background:#fff;border-radius:18px;padding:30px 28px;width:min(360px,90vw);box-shadow:0 25px 70px rgba(0,0,0,.4)">
+    <div style="font-size:30px;text-align:center;margin-bottom:4px">🔒</div>
+    <h2 style="margin:0 0 4px;font-size:19px;text-align:center;color:#0f172a">BD Hack-Audit</h2>
+    <p style="margin:0 0 18px;color:#64748b;font-size:12.5px;text-align:center">এই dashboard সুরক্ষিত — login করে ঢুকুন</p>
+    <input id="authUser" placeholder="ID" autocomplete="username" style="width:100%;padding:11px 13px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:10px;font-size:14px;box-sizing:border-box">
+    <input id="authPass" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuthLogin()" style="width:100%;padding:11px 13px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:14px;font-size:14px;box-sizing:border-box">
+    <button onclick="doAuthLogin()" style="width:100%;padding:12px;border:0;border-radius:10px;background:#0891b2;color:#fff;font-weight:700;font-size:15px;cursor:pointer">ঢুকুন</button>
+    <div id="authErr" style="font-size:12px;margin-top:10px;min-height:16px;text-align:center"></div>
+    <div style="font-size:10.5px;color:#94a3b8;text-align:center;margin-top:12px">Javed IT Solution</div>
+  </div>
+</div>
 <div class="wrap">
   <header>
     <div class="logo">
@@ -192,16 +269,21 @@
     <div class="tab" data-v="system"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg> Workers / System</div>
     <div class="tab" data-v="feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Live Feed</div>
     <div class="tab" data-v="manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg> Manual Scan</div>
+    <div class="tab" data-v="review"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg> অনুমোদনের অপেক্ষায় <span class="badge" id="revBadge" style="background:#b45309">0</span></div>
     <div class="tab" data-v="shots"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg> আক্রান্ত সাইট <span class="badge" id="shotBadge" style="background:var(--purple)">0</span></div>
+    <div class="tab" data-v="safe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg> নিরাপদ সাইট <span class="badge" id="safeBadge" style="background:#10b981">0</span></div>
   </div>
 
   <!-- OVERVIEW -->
   <div class="view on" id="v-overview">
+    <div id="liveProcMini"></div>
     <div class="grid cards" id="cards"></div>
+    <div class="divider"><span class="dl"><span class="di di-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-6"/></svg></span> অগ্রগতি ও scan rate</span></div>
     <div class="row r-2b">
       <div class="panel"><h2>দিন-প্রতি অগ্রগতি (cumulative)<small id="dHint"></small></h2><div class="pad"><svg class="chart" id="dailyChart" viewBox="0 0 800 190" preserveAspectRatio="none"></svg></div><div class="legend"><span><i style="color:var(--blue)">■</i> scanned</span><span><i style="color:var(--gold)">■</i> flagged</span><span><i style="color:var(--red)">■</i> confirmed</span></div></div>
       <div class="panel"><h2>ঘণ্টা-প্রতি scan rate (৪৮ ঘণ্টা)<small id="hHint"></small></h2><div class="pad"><svg class="chart" id="hourlyChart" viewBox="0 0 800 190" preserveAspectRatio="none"></svg></div><div class="legend"><span><i style="color:var(--cyan)">■</i> scanned/hr</span></div></div>
     </div>
+    <div class="divider"><span class="dl"><span class="di di-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span> আক্রান্ত বিশ্লেষণ · <span class="n" id="divCatN">০</span> site</span></div>
     <div class="row r-2">
       <div class="panel"><h2>confirmed hack — category breakdown<small id="catHint"></small></h2><div class="pad" id="catBars"></div></div>
       <div class="panel"><h2>queue health</h2><div class="pad" id="queueBox"></div></div>
@@ -224,6 +306,13 @@
         <span class="chip" data-c="redirect" onclick="setCat(this)">redirect</span>
       </div>
       <div class="filters" id="bizFilter" style="padding:0 15px 11px;display:flex;gap:7px;flex-wrap:wrap"></div>
+      <div class="filters" id="areaFilter" style="padding:0 15px 11px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:11px;color:var(--muted);font-weight:700">এলাকা:</span>
+        <input list="areaList" id="areaSelect" placeholder="এলাকা টাইপ বা বাছুন…" onchange="setArea(this.value)" style="padding:7px 12px;border:1px solid var(--line,#e2e8f0);border-radius:9px;font-size:13px;min-width:175px">
+        <datalist id="areaList"></datalist>
+        <span id="areaCount" style="font-size:11px;color:var(--muted)"></span>
+        <button id="areaScanBtn" onclick="scanArea()" style="display:none;padding:7px 13px;border:0;border-radius:9px;background:#0891b2;color:#fff;font-weight:700;font-size:12px;cursor:pointer">↗ এই এলাকা scan</button>
+      </div>
       <div class="expbar">
         <span class="lab">Export:</span>
         <span class="btn x-txt" onclick="exportLeads('txt')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> TXT</span>
@@ -254,14 +343,66 @@
 
   <!-- SYSTEM -->
   <div class="view" id="v-system">
+    <div class="divider"><span class="dl"><span class="di di-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> এই মুহূর্তে ইঞ্জিন কী করছে — live process <span style="font-weight:600;color:var(--muted)">(zero API)</span></span></div>
+    <div class="panel" style="margin-bottom:13px">
+      <h2>live process — real-time scan + harvest pipeline<small id="lpHint"></small></h2>
+      <div class="pad">
+        <div id="lpNow"></div>
+        <div class="lp-grid" id="lpGrid"></div>
+        <div id="lpSteps"></div>
+      </div>
+    </div>
+    <div class="divider"><span class="dl"><span class="di di-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg></span> shard fleet — Cloudflare parallel scanner</span></div>
     <div class="row r-2b">
-      <div class="panel"><h2>scan engine — Cloudflare parallel shards (always-on)<small id="wHint"></small></h2><div class="scroll"><table id="workers"><thead><tr><th>engine</th><th class="n">scanned</th><th class="n">shards</th><th>state</th><th>seen</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="panel"><h2>scan engine — ৮ parallel shard (always-on)<small id="wHint"></small></h2><div id="fleetBox" class="fleet"></div><div style="display:none"><table id="workers"><tbody></tbody></table></div></div>
       <div class="panel"><h2>scan health</h2><div class="pad" id="healthBox"></div></div>
     </div>
   </div>
 
   <!-- FEED -->
   <div class="view" id="v-feed"><div class="panel"><h2>live feed — scan + harvest activity (কোন source কত domain আনল, কী hacked পাওয়া গেল)</h2><div class="feed" id="feed"></div></div></div>
+
+  <style>
+  #v-safe .safelist{display:flex;flex-direction:column;border:1px solid var(--bd,#e2e8f0);border-radius:12px;overflow:hidden}
+  #v-safe .srow{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,2fr) auto auto;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--bd,#eef2f7);font-size:13px}
+  #v-safe .srow:nth-child(even){background:rgba(16,185,129,.035)}
+  #v-safe .srow:last-child{border-bottom:0}
+  #v-safe .sd{font-weight:700;color:#0891b2;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #v-safe .sd:hover{text-decoration:underline}
+  #v-safe .sbz{color:var(--muted,#64748b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #v-safe .ssc{font-weight:800;color:#10b981;font-size:12px;text-align:right;white-space:nowrap}
+  #v-safe .ssr{color:var(--muted,#94a3b8);font-size:11px;text-align:right;white-space:nowrap}
+  #v-safe .sbtn{padding:8px 14px;border:0;border-radius:9px;color:#fff;font-weight:700;font-size:12.5px;cursor:pointer}
+  @media(max-width:640px){#v-safe .srow{grid-template-columns:1fr auto;gap:3px 10px}#v-safe .sbz{grid-column:1;font-size:11.5px}#v-safe .ssc{grid-row:1;grid-column:2;align-self:start}#v-safe .ssr{grid-column:2}}
+  </style>
+  <div class="view" id="v-safe">
+    <div class="panel">
+      <h2>নিরাপদ সাইট — clean Bangladeshi business (এখনো কোনো hack পাওয়া যায়নি) <small>মোট <b id="safeCount" class="bn-num">০</b> · এদের কাছে SEO / development / security service বেচার সুযোগ</small></h2>
+      <div style="display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:12px 0 10px">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="font-size:11.5px;color:var(--muted);font-weight:700">তালিকা:</span>
+          <span class="chip on" data-st="clean" onclick="setSafeType(this)">✅ নিরাপদ সাইট</span>
+          <span class="chip" data-st="dead" onclick="setSafeType(this)">⚠️ মৃত / ভুল domain</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="font-size:11.5px;color:var(--muted);font-weight:700">অঞ্চল:</span>
+          <span class="chip on" data-sr="" onclick="setSafeRegion(this)">সব</span>
+          <span class="chip" data-sr="bd" onclick="setSafeRegion(this)">বাংলাদেশি</span>
+          <span class="chip" data-sr="intl" onclick="setSafeRegion(this)">অন্যান্য</span>
+        </div>
+        <label style="display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--muted);font-weight:700;cursor:pointer"><input type="checkbox" id="safeShotChk" onchange="toggleSafeShots(this.checked)"> 📷 screenshot</label>
+        <label style="display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--muted);font-weight:700;cursor:pointer"><input type="checkbox" id="safeClusterChk" onchange="toggleSafeCluster(this.checked)"> 🖧 server cluster (IP)</label>
+        <input type="search" placeholder="domain / business খুঁজুন…" oninput="safeSearch(this.value)" style="flex:1;min-width:150px;padding:8px 12px;border:1px solid var(--bd,#e2e8f0);border-radius:10px;font-size:13px">
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="sbtn" style="background:#0f172a" onclick="exportSafe('txt')">TXT</button>
+          <button class="sbtn" style="background:#10b981" onclick="exportSafe('xlsx')">Excel</button>
+          <span id="safeExpMsg" style="font-size:11.5px;color:var(--muted)"></span>
+        </div>
+      </div>
+      <div id="safeSrcBar" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px"></div>
+      <div id="safeCatBar" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 12px"></div>
+      <div class="safelist" id="safeList"></div>
+      <div style="text-align:center;margin-top:14px"><button id="safeMore" onclick="loadSafe()" style="padding:9px 22px;border:1px solid var(--bd,#e2e8f0);border-radius:10px;background:#fff;font-weight:700;cursor:pointer;display:none">আরও দেখুন · দেখাচ্ছে <span id="safeShown" class="bn-num">০</span></button></div>
+    </div>
+  </div>
 
   <!-- MANUAL SCAN -->
   <div class="view" id="v-manual">
@@ -280,6 +421,19 @@
     <div class="panel" style="margin-top:13px">
       <h2>সংরক্ষিত manual scan — batch অনুযায়ী<small id="manStoreHint"></small></h2>
       <div id="manStore" class="pad"><div class="empty">এখনো manual scan করা হয়নি</div></div>
+    </div>
+  </div>
+
+  <!-- REVIEW QUEUE — adult findings on non-.bd domains never auto-publish; a human decides. -->
+  <div class="view" id="v-review">
+    <div class="panel">
+      <h2>অনুমোদনের অপেক্ষায় — adult শ্রেণির সন্দেহভাজন<small id="revHint"></small></h2>
+      <div style="padding:11px 15px;color:var(--muted);font-size:12.5px;line-height:1.7;border-bottom:1px solid var(--line)">
+        adult শ্রেণিতে ২৬টা আসল porn সাইট lead হিসেবে ঢুকে পড়েছিল, কারণ AI ওদের "hacked_client" বলেছিল। তাই এখন
+        <b>.bd / .edu.bd / .gov.bd ছাড়া কোনো adult finding নিজে থেকে lead হয় না</b> — এখানে জমা হয়, আপনি দেখে সিদ্ধান্ত দেন।
+        screenshot দেখে বুঝে নিন সাইটটা আসল ব্যবসা নাকি porn সাইট।
+      </div>
+      <div class="shotgrid" id="revgrid"></div>
     </div>
   </div>
 
@@ -307,6 +461,16 @@
         <span class="chip" data-sc="redirect" onclick="setShotCat(this)">redirect</span>
         <span class="chip" data-sc="cloak" onclick="setShotCat(this)">cloak</span>
       </div>
+      <div class="shotbar" id="shotBizBar"></div>
+      <div class="shotbar" style="justify-content:flex-end;gap:9px">
+        <span class="lab" style="font-size:11.5px;color:var(--muted);font-weight:700">সাজান:</span>
+        <select class="sortsel" id="shotSort" onchange="setShotSort(this.value)">
+          <option value="recent">নতুন আগে</option>
+          <option value="cluster">একই server একসাথে</option>
+          <option value="biz">business type</option>
+          <option value="domain">domain (A→Z)</option>
+        </select>
+      </div>
       <div class="shotgrid" id="shotgrid"></div>
     </div>
   </div>
@@ -332,30 +496,152 @@ const API=(window.API_BASE||"").replace(/\/$/,"");
 const bn=n=>(n==null?"—":Number(n).toLocaleString('en-US')).replace(/[0-9]/g,d=>"০১২৩৪৫৬৭৮৯"[d]);
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ago=ts=>{if(!ts)return"—";const s=Math.floor(Date.now()/1000)-ts;if(s<60)return bn(s)+" সেকেন্ড আগে";if(s<3600)return bn(Math.floor(s/60))+" মিনিট আগে";if(s<86400)return bn(Math.floor(s/3600))+" ঘণ্টা আগে";return bn(Math.floor(s/86400))+" দিন আগে";};
-const CAT={gambling:'জুয়া/ক্যাসিনো',pharma:'ওষুধ স্প্যাম',adult:'অ্যাডাল্ট',cloak:'cloaking',deface:'defacement',redirect:'redirect',foreign_lang:'বিদেশি ভাষা',malware:'malware'};
+const CAT={gambling:'জুয়া/ক্যাসিনো',pharma:'ওষুধ স্প্যাম',adult:'অ্যাডাল্ট',cloak:'cloaking',deface:'defacement',redirect:'redirect',foreign_lang:'বিদেশি ভাষা',malware:'malware',exposure:'গোপন ফাইল ফাঁস'};
 // human description of every domain-collection method shown on the Harvest tab
 const SRC_INFO={
   'existing-bulk':{d:'আপনার আগের bulk domain তালিকা (mixed)',k:'mixed'},
   'global-ranked':{d:'DomCop top-1M global ranking — বিশ্বের জনপ্রিয় সাইট',k:'global'},
   'global':{d:'paced top-global ranking feeder (D1 limit মেনে ধীরে ঢোকে)',k:'global'},
   'crtsh':{d:'Certificate Transparency logs — যেকোনো নতুন .bd SSL সার্টিফিকেট (auto, 24/7 firehose)',k:'bd'},
-  'directories':{d:'BD business directory (bdtradeinfo ইত্যাদি)-র Website field',k:'bd'},
+  'directories':{d:'BD business directory (bdtradeinfo proxy/jina, businessdirectory, bdbusinessdirectory, bangladeshbusinessdir)-র Website field',k:'bd'},
+  'wikidata':{d:'Wikidata — বাংলাদেশি org/কোম্পানির official website (P856, country=Bangladesh): gov/edu/ngo/news/company',k:'bd'},
   'reverse-ip':{d:'BD hosting ASN-এর IP রেঞ্জে host করা সব domain (সবচেয়ে বড় BD firehose)',k:'bd'},
+  'ip-tree':{d:'IP-tree gold-mine — confirmed host IP → reverse-IP → dense /24 প্রতিবেশী → recursive snowball (shared-hosting space ধরে লাখে পৌঁছায়)',k:'bd'},
   'reverse_ip':{d:'BD hosting ASN-এর IP রেঞ্জে host করা domain',k:'bd'},
   'osm':{d:'OpenStreetMap (Overpass) — BD ব্যবসার website ট্যাগ',k:'bd'},
   'bd-bulk-157m':{d:'১৫৭M raw bulk → .bd/reverse-IP filter',k:'global'},
   'bulk-bd-extract':{d:'১০.৪M bulk থেকে বের করা registrable .bd domain',k:'bd'},
 };
 const KIND={bd:{t:'বাংলাদেশ',c:'#10b981'},global:{t:'global',c:'#5b7088'},mixed:{t:'mixed',c:'#e7a700'}};
-let LEADS=[], curCat="", curRegion="bd", curBiz="", curGroup="", STATS={};
+let LEADS=[], curCat="", curRegion="bd", curBiz="", curArea="", curGroup="", STATS={}, FEEDDATA=[];
 
 // ---- tabs ----
 document.getElementById('tabs').onclick=e=>{const t=e.target.closest('.tab');if(!t)return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===t));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+t.dataset.v));
-  if(t.dataset.region){curRegion=t.dataset.region;curBiz="";renderLeads();}
+  if(t.dataset.region){curRegion=t.dataset.region;curBiz="";curArea="";renderLeads();}
   if(t.dataset.v==='manual')loadManualStore();
-  if(t.dataset.v==='shots')renderShots();};
+  if(t.dataset.v==='shots')renderShots();
+  if(t.dataset.v==='review')loadReview();
+  if(t.dataset.v==='safe')loadSafe(true);};
+
+// ---- review queue: adult findings that must not auto-publish ----
+let REVROWS=[];
+async function loadReview(){
+  const grid=document.getElementById('revgrid'); if(!grid)return;
+  grid.innerHTML='<div class="empty" style="grid-column:1/-1">লোড হচ্ছে…</div>';
+  try{
+    const r=await(await fetch(API+'/api/leads?confirmed=0&limit=500',{cache:'no-store'})).json();
+    REVROWS=(r.leads||[]).filter(l=>l.status==='review'&&l.category==='adult');
+  }catch(e){REVROWS=[];}
+  document.getElementById('revBadge').textContent=bn(REVROWS.length);
+  document.getElementById('revHint').textContent=' · '+bn(REVROWS.length)+' টি অপেক্ষমাণ';
+  if(!REVROWS.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1">অপেক্ষমাণ কিছু নেই ✅</div>';return;}
+  grid.innerHTML=REVROWS.map((l,i)=>{
+    const u='https://'+(l.apex||l.domain);
+    return `<div class="shotcard"><div class="shotimg"><div class="ld">screenshot…</div><img data-src="${shotUrl(l,500)}" data-u="${esc(u)}" onload="shotLoad(this)" onerror="shotErr(this)" alt=""><span class="cat tag t-adult">adult</span></div>`
+      +`<div class="shotmeta"><a class="d" href="${esc(u)}" target="_blank" rel="noopener">${esc(l.apex||l.domain)}</a></div>`
+      +`<div style="display:flex;gap:7px;padding:0 11px 11px"><button class="btn" style="flex:1;background:var(--green,#16a34a);color:#fff;border:0;border-radius:8px;padding:7px;font-weight:700;cursor:pointer" onclick="decideReview(${l.id},'lead',this)">আসল ভুক্তভোগী — lead করুন</button>`
+      +`<button class="btn" style="flex:1;background:#e23d52;color:#fff;border:0;border-radius:8px;padding:7px;font-weight:700;cursor:pointer" onclick="decideReview(${l.id},'rejected',this)">porn সাইট — বাদ</button></div></div>`;
+  }).join('');
+  const obs=new IntersectionObserver((es,o)=>{es.forEach(e=>{if(e.isIntersecting){e.target.src=e.target.dataset.src;o.unobserve(e.target);}})},{rootMargin:'500px'});
+  grid.querySelectorAll('img[data-src]').forEach(im=>obs.observe(im));
+}
+async function decideReview(id,status,btn){
+  btn.disabled=true;btn.textContent='…';
+  try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,status})});}catch(e){}
+  REVROWS=REVROWS.filter(l=>l.id!==id);
+  if(status==='lead')loadLeads();
+  loadReview();
+}
+
+// ---- নিরাপদ সাইট (clean BD-business asset: scanned & NOT hacked) ----
+const BIZLABEL={education:'শিক্ষা',healthcare:'স্বাস্থ্য',ecommerce:'ই-কমার্স',garments:'গার্মেন্টস',realestate:'রিয়েল এস্টেট',food:'খাবার/হোটেল',finance:'ব্যাংক/ফাইন্যান্স',it:'IT/সফটওয়্যার',ngo:'NGO',travel:'ট্রাভেল',news:'সংবাদ',government:'সরকারি',agro:'কৃষি',pharma:'ফার্মা',automobile:'অটো/পরিবহন',professional:'পেশাদার',['general-business']:'সাধারণ ব্যবসা'};
+const BIZORDER=['education','healthcare','it','ecommerce','garments','realestate','food','finance','ngo','travel','news','government','agro','pharma','automobile','professional','general-business'];
+let SAFE={type:'clean',region:'',biz:'',source:'',q:'',off:0,rows:[],done:false,loading:false,shots:false,cluster:false};
+let safeObs=null;
+const SRCLABEL={'ip-tree':'IP-tree (BD hosting)','lead-coip':'shared-server neighbour','reverse-ip':'reverse-IP','bd-ip-sweep':'BD IP sweep','crux':'CrUX (Chrome)','crtsh':'crt.sh (.bd cert)','domains-project':'Domains-Project (.bd)','wiki-edu':'Wikipedia edu','wikidata':'Wikidata','directories':'BD directory','commoncrawl':'Common Crawl','osm':'OpenStreetMap','existing-bulk':'পুরনো bulk','bd-bulk-157m':'bulk','bulk-bd-extract':'bulk'};
+async function loadSafe(reset){
+  if(SAFE.loading)return;SAFE.loading=true;
+  if(reset){SAFE.off=0;SAFE.rows=[];SAFE.done=false;document.getElementById('safeList').innerHTML='<div style="padding:22px;text-align:center;color:var(--muted)">লোড হচ্ছে…</div>';}
+  const qs=safeQs();
+  try{
+    if(reset){const c=await(await fetch(API+'/api/domains?'+qs+'&count=1',{cache:'no-store'})).json();
+      if(c&&c.ok){const cc=document.getElementById('safeCount');if(cc)cc.textContent=bn(c.count);const sb=document.getElementById('safeBadge');if(sb&&SAFE.type==='clean'&&!SAFE.biz&&!SAFE.q&&!SAFE.region)sb.textContent=bn(c.count);}}
+    const d=await(await fetch(API+'/api/domains?'+qs+'&limit=500&offset='+SAFE.off,{cache:'no-store'})).json();
+    if(d&&d.ok){SAFE.rows=SAFE.rows.concat(d.domains);SAFE.off+=d.domains.length;if(d.domains.length<500)SAFE.done=true;renderSafe();}
+  }catch(e){document.getElementById('safeList').innerHTML='<div class="empty">লোড করা গেল না, আবার চেষ্টা করুন</div>';}
+  SAFE.loading=false;
+}
+function safeQs(){return 'type='+SAFE.type+'&region='+SAFE.region+(SAFE.biz?'&biz='+SAFE.biz:'')+(SAFE.source?'&source='+encodeURIComponent(SAFE.source):'')+'&q='+encodeURIComponent(SAFE.q);}
+function renderSafeSrcBar(){
+  const bar=document.getElementById('safeSrcBar');if(!bar)return;
+  const cnt={};SAFE.rows.forEach(r=>{const s=r.source||'?';cnt[s]=(cnt[s]||0)+1;});
+  const order=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
+  bar.innerHTML='<span style="font-size:11.5px;color:var(--muted);font-weight:700">source:</span>'+
+    `<span class="chip ${!SAFE.source?'on':''}" onclick="setSafeSource('')">সব</span>`+
+    order.map(s=>`<span class="chip ${SAFE.source===s?'on':''}" onclick="setSafeSource('${s}')" title="${s}">${SRCLABEL[s]||s} · ${bn(cnt[s])}</span>`).join('');
+}
+function setSafeSource(s){SAFE.source=s;loadSafe(true);}
+function toggleSafeCluster(on){SAFE.cluster=on;if(on){document.getElementById('safeShotChk').checked=false;SAFE.shots=false;}renderSafe();}
+function renderSafeCatBar(){
+  const bar=document.getElementById('safeCatBar');if(!bar)return;
+  const cnt={};SAFE.rows.forEach(r=>{const c=r.category||'general-business';cnt[c]=(cnt[c]||0)+1;});
+  const order=BIZORDER.filter(c=>cnt[c]||SAFE.biz===c);
+  bar.innerHTML='<span style="font-size:11.5px;color:var(--muted);font-weight:700">ধরন:</span>'+
+    `<span class="chip ${!SAFE.biz?'on':''}" onclick="setSafeBiz('')">সব</span>`+
+    order.map(c=>`<span class="chip ${SAFE.biz===c?'on':''}" onclick="setSafeBiz('${c}')">${BIZLABEL[c]||c}${cnt[c]?' · '+bn(cnt[c]):''}</span>`).join('');
+}
+function renderSafe(){
+  const el=document.getElementById('safeList');if(!el)return;
+  renderSafeCatBar();renderSafeSrcBar();
+  if(!SAFE.rows.length){el.innerHTML='<div style="padding:22px;text-align:center;color:var(--muted)">এই filter-এ কোনো সাইট নেই</div>';document.getElementById('safeMore').style.display='none';return;}
+  if(SAFE.cluster){
+    el.className='safelist';
+    const g={};SAFE.rows.forEach(r=>{const ip=(r.ip&&r.ip!=='-'&&r.ip!=='cdn')?r.ip:'__x';(g[ip]=g[ip]||[]).push(r);});
+    const keys=Object.keys(g).sort((a,b)=>a==='__x'?1:b==='__x'?-1:g[b].length-g[a].length);
+    el.innerHTML=keys.map(ip=>{const rows=g[ip];const head=ip==='__x'?'IP এখনো জানা নেই ('+bn(rows.length)+')':'🖧 '+ip+' — <b>'+bn(rows.length)+'</b>টি সাইট এক server-এ';
+      return `<div style="margin:6px 0 4px;font-size:12px;font-weight:800;color:#0891b2;background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:7px 11px">${head}</div>`+
+        rows.map(r=>`<div class="srow"><a class="sd" href="https://${esc(r.domain)}" target="_blank" rel="noopener">${esc(r.domain)}</a><span class="sbz">${BIZLABEL[r.category]||r.business||'—'}</span><span class="ssr">${esc(r.source||'')}</span></div>`).join('');
+    }).join('');
+    document.getElementById('safeMore').style.display=SAFE.done?'none':'';document.getElementById('safeShown').textContent=bn(SAFE.rows.length);return;
+  }
+  if(SAFE.shots){
+    el.className='shotgrid';
+    el.innerHTML=SAFE.rows.map(r=>{const u='https://'+r.domain;return `<div class="shotcard" onclick="window.open('${u}','_blank')"><div class="shotimg"><div class="ld">screenshot…</div><img data-src="${shotUrl({domain:r.domain},500)}" data-u="${esc(u)}" onload="shotLoad(this)" onerror="shotErr(this)" alt=""><span class="cat tag" style="background:#0891b2">${BIZLABEL[r.category]||r.category||'?'}</span></div><div class="shotmeta"><span class="d">${esc(r.domain)}</span><span style="font-size:10px;color:var(--muted)">bd <span class="bn-num">${bn(r.bd_score)}</span> · ${esc(r.source||'')}</span></div></div>`;}).join('');
+    lazySafeShots();
+  }else{
+    el.className='safelist';
+    el.innerHTML=SAFE.rows.map(r=>`<div class="srow"><a class="sd" href="https://${esc(r.domain)}" target="_blank" rel="noopener">${esc(r.domain)}</a><span class="sbz">${r.business?esc(r.business):(BIZLABEL[r.category]||'—')}</span><span class="ssc" title="ব্যবসার ধরন" style="font-size:10.5px;color:#0891b2;font-weight:700">${BIZLABEL[r.category]||''}</span><span class="ssc">bd <span class="bn-num">${bn(r.bd_score)}</span></span><span class="ssr">${esc(r.source||'')}</span></div>`).join('');
+  }
+  document.getElementById('safeMore').style.display=SAFE.done?'none':'';
+  document.getElementById('safeShown').textContent=bn(SAFE.rows.length);
+}
+function lazySafeShots(){const grid=document.getElementById('safeList');if(safeObs)safeObs.disconnect();
+  safeObs=new IntersectionObserver((ents,o)=>{ents.forEach(e=>{if(e.isIntersecting){e.target.src=e.target.dataset.src;o.unobserve(e.target);}});},{rootMargin:'500px'});
+  grid.querySelectorAll('img[data-src]').forEach(im=>safeObs.observe(im));}
+function setSafeType(el){SAFE.type=el.dataset.st;el.parentElement.querySelectorAll('.chip[data-st]').forEach(x=>x.classList.toggle('on',x===el));
+  document.querySelector('#v-safe h2').firstChild.textContent=SAFE.type==='dead'?'মৃত / ভুল domain — scan-এ পাওয়া যায়নি (আর অস্তিত্ব নেই / unreachable) ':'নিরাপদ সাইট — clean Bangladeshi business (এখনো কোনো hack পাওয়া যায়নি) ';
+  SAFE.biz='';loadSafe(true);}
+function setSafeRegion(el){SAFE.region=el.dataset.sr;el.parentElement.querySelectorAll('.chip[data-sr]').forEach(x=>x.classList.toggle('on',x===el));loadSafe(true);}
+function setSafeBiz(b){SAFE.biz=b;loadSafe(true);}
+function toggleSafeShots(on){SAFE.shots=on;renderSafe();}
+let safeT;function safeSearch(v){SAFE.q=(v||'').trim();clearTimeout(safeT);safeT=setTimeout(()=>loadSafe(true),400);}
+async function exportSafe(fmt){
+  const msg=document.getElementById('safeExpMsg');msg.textContent='export তৈরি হচ্ছে… (একটু সময় নেবে)';
+  const qs=safeQs();
+  let off=0,all=[],pg;
+  try{do{pg=await(await fetch(API+'/api/domains?'+qs+'&limit=5000&offset='+off,{cache:'no-store'})).json();
+    if(pg&&pg.ok&&pg.domains.length){all=all.concat(pg.domains);off+=pg.domains.length;}else break;
+  }while(pg.domains.length===5000&&off<80000);}catch(e){}
+  msg.textContent='';
+  if(!all.length){alert('export করার মতো কিছু নেই');return;}
+  const base='bd-'+(SAFE.type==='dead'?'dead':'safe')+'-sites-'+all.length;
+  if(fmt==='txt'){dl(base+'.txt',new Blob([all.map(r=>r.domain).join('\n')],{type:'text/plain;charset=utf-8'}));}
+  else{if(typeof XLSX==='undefined'){alert('Excel module লোড হচ্ছে — ২-৩ সেকেন্ড পর আবার চাপুন');return;}
+    const ws=XLSX.utils.json_to_sheet(all.map(r=>({domain:r.domain,business:r.business||'',category:r.category||'',bd_score:r.bd_score,source:r.source||''})));
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,SAFE.type==='dead'?'DeadDomains':'SafeSites');XLSX.writeFile(wb,base+'.xlsx');}
+}
 
 // ---- charts ----
 function lineChart(svg,series,max,colors){const W=800,H=190,P=6;svg.innerHTML="";if(!series[0]||series[0].length<2){svg.innerHTML='<text x="400" y="95" text-anchor="middle" fill="#5b7088" font-size="13" font-family="Inter">data নেই</text>';return;}
@@ -377,13 +663,14 @@ async function tick(){
 function renderStats(s){
   const c=s.counters||{},daily=s.daily||[],hourly=s.hourly||[],today=daily.length?daily[daily.length-1]:{},q=s.queue||{};
   const queued=(s.unscanned!=null)?s.unscanned:((q.ready?.domains||0)+(q.open?.domains||0)+(q.claimed?.domains||0));
-  const conv=c.total_flagged?Math.round(100*c.total_confirmed/c.total_flagged):0;
+  const confSites=(s.confirmed_sites!=null)?s.confirmed_sites:(c.total_confirmed||0); // live distinct truth
+  const conv=c.total_flagged?Math.round(100*confSites/c.total_flagged):0;
   document.getElementById('cards').innerHTML=
     card('b-blue',IC.t,'মোট domain (queue)',bn(c.total_domains),'harvested '+bn(c.total_harvested))+
     card('b-cyan',IC.s,'মোট scanned',bn(c.total_scanned),'আজ '+bn(today.scanned||0))+
     card('b-purple',IC.r,'rate (এই ঘণ্টা)',bn(s.rate_this_hour),'per hour')+
     card('b-gold',IC.f,'flagged',bn(c.total_flagged),conv.toString().replace(/[0-9]/g,d=>"০১২৩৪৫৬৭৮৯"[d])+'% conv')+
-    card('b-red',IC.c,'CONFIRMED HACKED',bn(c.total_confirmed),'আজ '+bn(today.confirmed||0))+
+    card('b-red',IC.c,'CONFIRMED HACKED',bn(confSites),'আজ '+bn(today.confirmed||0))+
     card('b-green',IC.q,'queue বাকি',bn(queued),(q.done?.batches?bn(q.done.batches)+' batch done':''));
   let cs=0,cf=0,cc=0;const ds=[],df=[],dc=[];daily.forEach(d=>{cs+=d.scanned||0;cf+=d.flagged||0;cc+=d.confirmed||0;ds.push(cs);df.push(cf);dc.push(cc);});
   lineChart(document.getElementById('dailyChart'),[ds,df,dc],Math.max(cs,1),['var(--blue)','var(--gold)','var(--red)']);
@@ -391,7 +678,9 @@ function renderStats(s){
   barChart(document.getElementById('hourlyChart'),hourly.map(h=>h.scanned||0),'var(--cyan)');document.getElementById('hHint').textContent=bn(hourly.length)+" ঘণ্টা";
   const cats=s.categories||[],cmax=Math.max(1,...cats.map(x=>x.c)),col={gambling:'var(--red)',pharma:'var(--blue)',adult:'var(--purple)',cloak:'var(--orange)',deface:'#d4313f',redirect:'var(--green)',foreign_lang:'var(--muted)',malware:'#ff7a8a'};
   document.getElementById('catBars').innerHTML=cats.length?cats.map(x=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span class="tag t-${x.category}">${CAT[x.category]||x.category}</span><b class="num">${bn(x.c)}</b></div><div class="bar"><i style="width:${Math.max(4,100*x.c/cmax)}%;background:${col[x.category]||'var(--blue)'}"></i></div></div>`).join(''):'<div class="empty">এখনো confirmed নেই</div>';
-  document.getElementById('catHint').textContent=bn(cats.reduce((a,b)=>a+b.c,0))+" confirmed";
+  const catSum=cats.reduce((a,b)=>a+b.c,0);
+  document.getElementById('catHint').textContent=bn(catSum)+" confirmed";
+  const dcn=document.getElementById('divCatN');if(dcn)dcn.textContent=bn(s.confirmed_sites!=null?s.confirmed_sites:catSum);
   const ord=['open','ready','claimed','done'],qb={open:'ভরছে',ready:'প্রস্তুত',claimed:'scanning',done:'শেষ'};
   const qhtml=ord.map(k=>{const v=q[k]||{batches:0,domains:0};return `<div style="display:flex;justify-content:space-between;padding:8px 2px;border-bottom:1px solid var(--line)"><span style="font-weight:600">${qb[k]}</span><span><b class="num">${bn(v.batches)}</b> batch · <b class="num">${bn(v.domains)}</b> domain</span></div>`;}).join('');
   document.getElementById('queueBox').innerHTML=qhtml;document.getElementById('queueBox2').innerHTML=qhtml;
@@ -418,28 +707,75 @@ function renderStats(s){
     `<div style="display:flex;justify-content:space-between;padding:8px 2px;border-bottom:1px solid var(--line)"><span style="font-weight:600">backlog</span><b class="num">${bn(backlog)}</b></div>`+
     `<div style="display:flex;justify-content:space-between;padding:8px 2px;border-bottom:1px solid var(--line)"><span style="font-weight:600">আনুমানিক ETA</span><b class="num">${eta?bn(eta)+' ঘণ্টা':'—'}</b></div>`+
     `<div style="display:flex;justify-content:space-between;padding:8px 2px"><span style="font-weight:600">আজ error</span><b class="num">${bn((today.errors)||0)}</b></div>`;
+  renderFleet(s); renderLiveProcess();
 }
 
 // ---- leads ----
 function setCat(el){curCat=el.dataset.c;el.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===el));renderLeads();}
 function setBiz(t){curBiz=t;renderLeads();}
+function setArea(t){curArea=t;renderLeads();}
+function renderAreaDropdown(){const dl=document.getElementById('areaList');if(!dl)return;const inReg=l=>(curRegion==='bd'?l.is_bd:!l.is_bd);const counts={};LEADS.filter(l=>inReg(l)&&l.area&&l.area!=='-').forEach(l=>counts[l.area]=(counts[l.area]||0)+1);const areas=Object.keys(counts).sort();dl.innerHTML=areas.map(a=>'<option value="'+esc(a)+'">').join('');const inp=document.getElementById('areaSelect');if(inp&&inp.value!==curArea)inp.value=curArea;const lbl=document.getElementById('areaCount');if(lbl)lbl.textContent=areas.length?('· '+bn(areas.length)+' এলাকা'+(curArea?(' · '+bn(counts[curArea]||0)+' lead'):'')):'(এখনো এলাকা data নেই — backfill চলছে)';const btn=document.getElementById('areaScanBtn');if(btn)btn.style.display=(curArea&&curArea!=='')?'':'none';}
+function scanArea(){if(!curArea)return;const inReg=l=>(curRegion==='bd'?l.is_bd:!l.is_bd);const doms=[...new Set(LEADS.filter(l=>inReg(l)&&l.area===curArea).map(l=>l.domain))];if(!doms.length){alert('এই এলাকায় domain নেই');return;}const mt=document.querySelector('.tab[data-v="manual"]');if(mt)mt.click();const ta=document.getElementById('manDomains');if(ta){ta.value=doms.join(',');ta.scrollIntoView({behavior:'smooth',block:'center'});ta.focus();}}
 function renderBizChips(){const el=document.getElementById('bizFilter');const types=[...new Set(LEADS.filter(l=>curRegion==='bd'?l.is_bd:!l.is_bd).map(l=>l.biz_type).filter(Boolean))].sort();el.innerHTML=`<span class="chip ${!curBiz?'on':''}" onclick="setBiz('')">সব type</span>`+types.map(t=>`<span class="chip ${curBiz===t?'on':''}" onclick="setBiz('${t}')">${esc(t)}</span>`).join('');}
 function updateBadges(){document.getElementById('leadBadge').textContent=bn(LEADS.filter(l=>l.is_bd).length);document.getElementById('intlBadge').textContent=bn(LEADS.filter(l=>!l.is_bd).length);const sb=document.getElementById('shotBadge');if(sb)sb.textContent=bn(LEADS.length);}
-async function rejectLead(id){if(!confirm('এই lead সরিয়ে দেবেন? (এটা lead নয় হিসেবে চিহ্নিত হবে)'))return;try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:id,status:'rejected'})});}catch(e){}LEADS=LEADS.filter(l=>l.id!==id);closeModal();updateBadges();renderLeads();}
+// The card is an ORGANISATION, so rejecting it must reject every finding rolled into it. Rejecting only the
+// representative row left the siblings at status='lead' AND confirmed=1: the next loadLeads() re-grouped them
+// on the same apex, elected a new representative and the card came straight back — i.e. the only
+// false-positive remedy in the product silently did nothing for exactly the multi-host orgs the rollup exists for.
+async function rejectLead(id,ids){if(!confirm('এই lead সরিয়ে দেবেন? (এটা lead নয় হিসেবে চিহ্নিত হবে)'))return;
+  const all=[...new Set(((ids&&ids.length)?ids:[id]).filter(x=>x!=null))];
+  for(const i of all){try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:i,status:'rejected'})});}catch(e){}}
+  LEADS=LEADS.filter(l=>!all.includes(l.id));closeModal();updateBadges();renderLeads();}
+// Roll up to ONE row per organisation. Six compromised hosts under buet.ac.bd are one hacked customer and one
+// sale, not six leads — showing them separately filled the whole gallery with the same university and made the
+// lead count lie. The row that represents the org is the apex host itself when it is among the findings (that is
+// the site the owner recognises and the one outreach should name); otherwise the host with the most evidence.
+// `hosts` keeps every affected hostname so the modal and the outreach message can list them.
+function dedupeLeads(arr){
+  const byOrg=new Map();
+  for(const l of arr){
+    const org=(l.apex||l.domain||'')+'|'+(l.is_manual||0);
+    const g=byOrg.get(org);
+    if(!g){byOrg.set(org,{rep:l,hosts:[l]});continue;}
+    if(g.hosts.some(h=>h.domain===l.domain))continue;   // same host twice → genuine duplicate, drop
+    g.hosts.push(l);
+    const isApex=x=>(x.domain||'').replace(/^www\./,'')===(x.apex||'');
+    const better=(isApex(l)&&!isApex(g.rep))||(isApex(l)===isApex(g.rep)&&(l.ev_count||0)>(g.rep.ev_count||0));
+    if(better)g.rep=l;
+  }
+  return [...byOrg.values()].map(g=>{
+    const r=Object.assign({},g.rep);
+    r.hosts=g.hosts.map(h=>h.domain);
+    r.ids=g.hosts.map(h=>h.id);          // every finding rolled into this card — reject must hit them ALL
+    r.hostCount=g.hosts.length;
+    // The representative is elected on apex-ness FIRST, so it can easily be the row without the phone number
+    // while a sibling host of the same organisation carries it. Copying only the rep's fields threw that
+    // contact away and rendered the WhatsApp button dead ('phone নেই') on a lead we do have a number for.
+    // These fields describe the ORGANISATION, not the host, so borrowing them from a sibling is exact, not a guess.
+    for(const f of ['phone','business','address','district','area','ip']){
+      if(r[f]&&r[f]!=='-')continue;
+      const donor=g.hosts.find(h=>h[f]&&h[f]!=='-');
+      if(donor)r[f]=donor[f];
+    }
+    return r;
+  });
+}
 async function loadLeads(){
-  try{const r=await(await fetch(API+"/api/leads?limit=3000",{cache:'no-store'})).json();LEADS=r.leads||[];
+  try{const r=await(await fetch(API+"/api/leads?slim=1&limit=3000",{cache:'no-store'})).json();
+    LEADS=dedupeLeads(r.leads||[]); // one row per domain → badges/list/headline all agree on the distinct count
     updateBadges();renderLeads();
     if(document.getElementById('v-shots').classList.contains('on'))renderShots();}catch(e){}
 }
 function renderLeads(){
   const q=(document.getElementById('leadSearch').value||"").toLowerCase();
   document.getElementById('regionLabel').textContent=curRegion==='bd'?'বাংলাদেশি':'International';
-  renderBizChips();
+  renderBizChips();renderAreaDropdown();
   let rows=currentRows();
   document.querySelector('#leads tbody').innerHTML=rows.length?rows.map(l=>{
-    let ev=[];try{ev=JSON.parse(l.evidence||"[]")}catch(e){}
-    const np=ev.length||(l.proof_url?1:0);
-    return `<tr class="lead-row" onclick="openLead(${LEADS.indexOf(l)})"><td data-label="domain"><span class="mono">${esc(l.domain)}</span></td><td data-label="business">${esc(l.business)||'—'}</td><td data-label="type">${l.biz_type?`<span class="tag" style="background:#eef2f9;color:#456a8a">${esc(l.biz_type)}</span>`:'—'}</td><td data-label="category"><span class="tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></td><td class="proof" data-label="আক্রান্ত">${bn(np)} পেজ</td><td class="mono" data-label="phone">${esc(l.phone)||'—'}</td><td data-label="when">${ago(l.ts)}</td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">কোনো lead নেই</td></tr>';
+    let np=l.ev_count; if(np==null){let ev=[];try{ev=JSON.parse(l.evidence||"[]")}catch(e){}np=ev.length||(l.proof_url?1:0);}
+    const org=l.apex||l.domain;
+    const multi=(l.hostCount||1)>1?` <span class="hostn" title="${esc((l.hosts||[]).join(', '))}">+${bn(l.hostCount-1)}</span>`:'';
+    return `<tr class="lead-row" onclick="openLead(${LEADS.indexOf(l)})"><td data-label="domain"><span class="mono">${esc(org)}</span>${multi}</td><td data-label="business">${esc(l.business)||'—'}</td><td data-label="type">${l.biz_type?`<span class="tag" style="background:#eef2f9;color:#456a8a">${esc(l.biz_type)}</span>`:'—'}</td><td data-label="category"><span class="tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></td><td class="proof" data-label="আক্রান্ত">${bn(np)} পেজ</td><td class="mono" data-label="phone">${esc(l.phone)||'—'}</td><td data-label="when">${ago(l.ts)}</td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">কোনো lead নেই</td></tr>';
   if(curGroup==='ip')renderClusters(rows);
   document.getElementById('leadHint').textContent=bn(rows.length)+" lead";
 }
@@ -450,43 +786,56 @@ function setGroup(g){
   document.getElementById('clusters').style.display=(g==='ip')?'block':'none';
   renderLeads();
 }
+const COLCAT={gambling:'#e23d52',pharma:'#0066FF',adult:'#7B2FFF',cloak:'#f0883e',deface:'#d4313f',redirect:'#10b981',foreign_lang:'#5b7088',malware:'#ff7a8a',exposure:'#b45309'};
+function catColor(c){return COLCAT[c]||'#0066FF';}
+const SRV_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>';
+function clusterHead(ip,g){
+  const named=ip!=='__none';
+  const mix={};g.forEach(l=>{mix[l.category]=(mix[l.category]||0)+1;});
+  const minibar=Object.keys(mix).sort((a,b)=>mix[b]-mix[a]).map(c=>`<i style="width:${(100*mix[c]/g.length).toFixed(1)}%;background:${catColor(c)}"></i>`).join('');
+  return named
+    ? `<div class="srv">${SRV_SVG}</div><div class="ipwrap"><span class="ip">${esc(ip)}</span><span class="meta">এই shared server-এ <b>${bn(g.length)}</b>টি hacked site</span></div><span class="cnt">${bn(g.length)}</span><div class="minibar">${minibar}</div>`
+    : `<div class="srv" style="background:linear-gradient(135deg,#8fa3b8,#5b7088)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg></div><div class="ipwrap"><span class="ip" style="color:var(--muted)">IP এখনো জানা যায়নি</span><span class="meta">পরের harvest-এ যোগ হবে</span></div><span class="cnt">${bn(g.length)}</span>`;
+}
 function renderClusters(rows){
   const box=document.getElementById('clusters');
   const groups={};
   rows.forEach(l=>{const ip=(l.ip&&l.ip!=='cdn')?l.ip:'__none';(groups[ip]=groups[ip]||[]).push(l);});
   const keys=Object.keys(groups).sort((a,b)=>{if(a==='__none')return 1;if(b==='__none')return -1;return groups[b].length-groups[a].length;});
   const withIp=rows.filter(l=>l.ip&&l.ip!=='cdn').length, servers=keys.filter(k=>k!=='__none').length;
+  const big=Math.max(0,...keys.filter(k=>k!=='__none').map(k=>groups[k].length));
   document.getElementById('clHint').textContent=bn(servers)+" server · "+bn(withIp)+"/"+bn(rows.length)+" IP জানা";
-  box.innerHTML=keys.length?keys.map(ip=>{
-    const g=groups[ip], named=ip!=='__none';
-    const head=named
-      ? `<span class="ip">${esc(ip)}</span><span class="meta">এই shared server-এ <b>${bn(g.length)}</b>টি hacked site</span>`
-      : `<span class="ip" style="color:var(--muted)">IP এখনো জানা যায়নি</span><span class="meta">পরের harvest-এ যোগ হবে</span>`;
-    const items=g.map(l=>`<div class="cdom" onclick="openLead(${LEADS.indexOf(l)})"><span class="d">${esc(l.domain)}</span><span class="tag t-${l.category}" style="flex:0 0 auto">${CAT[l.category]||l.category||'?'}</span></div>`).join('');
-    return `<div class="cluster"><div class="ch">${head}<span class="cnt">${bn(g.length)}</span></div><div class="cgrid">${items}</div></div>`;
-  }).join(''):'<div class="empty">এই filter-এ cluster নেই</div>';
+  const summary=`<div class="clsum"><div class="b"><div class="v">${bn(servers)}</div><div class="l">shared server</div></div><div class="b"><div class="v">${bn(rows.length)}</div><div class="l">আক্রান্ত site</div></div><div class="b"><div class="v">${bn(big)}</div><div class="l">সবচেয়ে বড় cluster</div></div><div class="b"><div class="v">${bn(withIp)}</div><div class="l">IP শনাক্ত</div></div></div>`;
+  box.innerHTML=keys.length?(summary+keys.map(ip=>{
+    const g=groups[ip];
+    const items=g.map(l=>`<div class="cdom" onclick="openLead(${LEADS.indexOf(l)})"><span class="dl2"><span class="cdot" style="background:${catColor(l.category)}"></span><span class="d">${esc(l.domain)}</span></span><span class="tag t-${l.category}" style="flex:0 0 auto">${CAT[l.category]||l.category||'?'}</span></div>`).join('');
+    return `<div class="cluster"><div class="ch">${clusterHead(ip,g)}</div><div class="cgrid">${items}</div></div>`;
+  }).join('')):'<div class="empty">এই filter-এ cluster নেই</div>';
 }
 
 // ---- export (TXT / Excel / organized PDF) ----
 function currentRows(){
   const q=(document.getElementById('leadSearch').value||"").toLowerCase();
-  return LEADS.filter(l=>(curRegion==='bd'?l.is_bd:!l.is_bd)&&(!curCat||l.category===curCat)&&(!curBiz||l.biz_type===curBiz)&&(!q||(l.domain||"").toLowerCase().includes(q)||(l.business||"").toLowerCase().includes(q)));
+  return LEADS.filter(l=>(curRegion==='bd'?l.is_bd:!l.is_bd)&&(!curCat||l.category===curCat)&&(!curBiz||l.biz_type===curBiz)&&(!curArea||l.area===curArea)&&(!q||(l.domain||"").toLowerCase().includes(q)||(l.business||"").toLowerCase().includes(q)));
 }
 function fileStamp(){return new Date().toISOString().slice(0,10);}
 function dl(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);}
-function expRows(){return currentRows().map(l=>({Domain:l.domain||'',Business:l.business||'',Type:l.biz_type||'',Hack:l.category||'',Phone:l.phone||'',Proof:(l.proof_snippet||'').slice(0,300),ProofURL:l.proof_url||'',Verdict:l.stage2_reason||'',Region:l.is_bd?'BD':'INTL',Scanned:l.ts?new Date(l.ts*1000).toISOString().slice(0,10):''}));}
+// Domain = the ORGANISATION (what the table, the gallery and the outreach message all name); Hosts lists every
+// compromised hostname rolled into it. Exporting the representative host instead made the PDF/Excel name a
+// subdomain the owner may not recognise and silently dropped the other N-1 hosts from the deliverable.
+function expRows(){return currentRows().map(l=>({Domain:l.apex||l.domain||'',Hosts:(l.hosts||[l.domain||'']).join(' '),Business:l.business||'',Type:l.biz_type||'',Hack:l.category||'',Phone:l.phone||'',Proof:(l.proof_snippet||'').slice(0,300),ProofURL:l.proof_url||'',Verdict:l.stage2_reason||'',Region:l.is_bd?'BD':'INTL',Scanned:l.ts?new Date(l.ts*1000).toISOString().slice(0,10):''}));}
 function exportLeads(fmt){
   const rows=expRows();
   if(!rows.length){alert('এই filter-এ export করার মতো lead নেই');return;}
   const base=(curRegion==='bd'?'bd':'intl')+'-hack-leads-'+fileStamp();
   if(fmt==='txt'){
     const head=`BD Hack-Audit — ${rows.length} ${curRegion==='bd'?'Bangladesh':'International'} confirmed-hacked sites — ${fileStamp()}\nPrepared by Javed IT Solution\n${'='.repeat(64)}\n\n`;
-    const body=rows.map((r,i)=>`${i+1}. ${r.Domain}   [${r.Hack}]\n   business : ${r.Business||'-'}   |  type: ${r.Type||'-'}   |  phone: ${r.Phone||'-'}\n   proof    : ${r.Proof||'-'}\n   evidence : ${r.ProofURL||'-'}\n`).join('\n');
+    const body=rows.map((r,i)=>`${i+1}. ${r.Domain}   [${r.Hack}]\n   business : ${r.Business||'-'}   |  type: ${r.Type||'-'}   |  phone: ${r.Phone||'-'}\n${(r.Hosts&&r.Hosts!==r.Domain)?`   hosts    : ${r.Hosts}\n`:''}   proof    : ${r.Proof||'-'}\n   evidence : ${r.ProofURL||'-'}\n`).join('\n');
     dl(base+'.txt',new Blob([head+body],{type:'text/plain;charset=utf-8'}));
   } else if(fmt==='xlsx'){
     if(typeof XLSX==='undefined'){alert('Excel module এখনো লোড হচ্ছে — ২-৩ সেকেন্ড পর আবার চাপুন');return;}
     const ws=XLSX.utils.json_to_sheet(rows);
-    ws['!cols']=[{wch:26},{wch:28},{wch:14},{wch:12},{wch:18},{wch:44},{wch:46},{wch:34},{wch:8},{wch:12}];
+    ws['!cols']=[{wch:26},{wch:40},{wch:28},{wch:14},{wch:12},{wch:18},{wch:44},{wch:46},{wch:34},{wch:8},{wch:12}];
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Leads');
     XLSX.writeFile(wb,base+'.xlsx');
   } else if(fmt==='pdf'){ exportPDF(rows); }
@@ -525,14 +874,22 @@ function phoneIntl(p){p=(p||"").replace(/[^0-9]/g,"");if(!p)return"";if(p.starts
 function googleQ(l){const k={gambling:"casino OR slot OR togel",pharma:"viagra OR cialis",adult:"porn OR xxx",deface:"hacked"}[l.category]||"";return "https://www.google.com/search?q="+encodeURIComponent("site:"+l.domain+(k?" "+k:""));}
 function sucuri(l){return "https://sitecheck.sucuri.net/results/"+encodeURIComponent(l.domain);}
 function pitch(l){
+  // `exposure` is NOT an injection — the site is not serving spam, its .git/backup/config is readable by anyone.
+  // It gets its own message because telling an owner "spam has been injected" when it has not is a false claim,
+  // and the fix and the urgency are different too.
+  if(l.category==='exposure')return exposurePitch(l);
   const cb={gambling:'লুকানো জুয়া/ক্যাসিনো স্প্যাম পেজ',pharma:'ভায়াগ্রা/ওষুধ স্প্যাম পেজ',adult:'অ্যাডাল্ট/পর্ন স্প্যাম',deface:'হ্যাকারের ডিফেস বার্তা',cloak:'গোপন cloaked স্প্যাম (শুধু Google দেখে)',redirect:'ক্ষতিকর redirect',malware:'ক্ষতিকর malware কোড',foreign_lang:'বিদেশি ভাষার স্প্যাম পেজ'}[l.category]||'স্প্যাম injection';
   let ev=[];try{ev=JSON.parse(l.evidence||"[]")}catch(e){}
   const first=(ev[0]&&ev[0].url)||l.proof_url||("https://"+l.domain+"/");
   return `আসসালামু আলাইকুম${l.business?', '+l.business:''}।
 
-আমি Anjur Javed — Javed IT Solution। সরাসরি বলছি: আপনার ওয়েবসাইট ${l.domain} এই মুহূর্তে HACKED।
+আমি Anjur Javed — Javed IT Solution। সরাসরি বলছি: আপনার ওয়েবসাইট ${l.apex||l.domain} এই মুহূর্তে HACKED।
 
-আপনার সাইটে ${cb} বসানো হয়েছে — যা এখন Google-এ আপনার ব্যবসার নামের সাথে দেখাচ্ছে এবং আপনার সুনাম ও Google র‍্যাংকিং দুটোই নষ্ট করছে।
+আপনার সাইটে ${cb} বসানো হয়েছে — যা এখন Google-এ আপনার ব্যবসার নামের সাথে দেখাচ্ছে এবং আপনার সুনাম ও Google র‍্যাংকিং দুটোই নষ্ট করছে।${(l.hostCount||1)>1?`
+
+⚠️ একটি নয় — আপনার ${bn(l.hostCount)}টি host একসাথে আক্রান্ত:
+${(l.hosts||[]).map(h=>'• '+h).join('\n')}
+একই server-এ ছড়িয়েছে, মানে মূল ফাঁকটা এখনো খোলা।`:''}
 
 প্রমাণ (নিজেই দেখে নিন):
 • আক্রান্ত পেজ: ${first}
@@ -546,24 +903,32 @@ function pitch(l){
 function emailBody(l){return pitch(l);}
 
 function openLead(idx){ openLeadObj(LEADS[idx]); }
-function openLeadObj(l){
+async function openLeadObj(l){
   if(!l)return;
-  document.getElementById('mDomain').innerHTML=`<a href="https://${esc(l.domain)}" target="_blank" rel="noopener">${esc(l.domain)}</a> <span class="tag t-${l.category}" style="vertical-align:middle">${CAT[l.category]||l.category}</span>`;
+  if(l.evidence===undefined&&l.id){ // slim list row — fetch full evidence lazily (keeps the list payload tiny + fast)
+    try{const r=await(await fetch(API+'/api/lead?id='+l.id,{cache:'no-store'})).json();
+      if(r&&r.lead){l.evidence=r.lead.evidence;if(!l.proof_url)l.proof_url=r.lead.proof_url;if(!l.proof_snippet)l.proof_snippet=r.lead.proof_snippet;if(!l.layers)l.layers=r.lead.layers;if(!l.stage2_reason)l.stage2_reason=r.lead.stage2_reason;}
+      else l.evidence='[]';
+    }catch(e){l.evidence='[]';}
+  }
+  const org=l.apex||l.domain;
+  document.getElementById('mDomain').innerHTML=`<a href="https://${esc(org)}" target="_blank" rel="noopener">${esc(org)}</a> <span class="tag t-${l.category}" style="vertical-align:middle">${CAT[l.category]||l.category}</span>`;
   document.getElementById('mBiz').textContent=l.business||'(business নাম অজানা)';
   let ev=[];try{ev=JSON.parse(l.evidence||"[]")}catch(e){}
   if(!ev.length&&l.proof_url)ev=[{url:l.proof_url,layer:'',match:l.proof_snippet||''}];
   const p=pitch(l), wa=phoneIntl(l.phone);
   const evHtml=ev.length?ev.map(e=>`<div class="ev">${e.layer?`<div class="el">${esc(e.layer)}</div>`:''}<a class="eu" href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.url)}</a>${e.match?`<div class="em">⮞ ${esc(e.match)}</div>`:''}</div>`).join(''):'<div class="empty">এই lead-টি পুরোনো scan — পরের scan-এ বিস্তারিত আক্রান্ত পেজ আসবে। আপাতত প্রমাণ: '+esc(l.proof_snippet||l.proof_url||'')+'</div>';
   document.getElementById('mBody').innerHTML=
-    `<img class="mshot" loading="lazy" src="${shotUrl(l,760)}" onerror="this.style.display='none'" alt="আক্রান্ত পেজের screenshot">
+    `<img class="mshot" loading="lazy" src="${shotUrl(l,760)}" data-u="${esc(l.proof_url||('https://'+l.domain))}" onload="shotLoad(this)" onerror="shotErr(this)" alt="আক্রান্ত পেজের screenshot">
      <div class="kv"><span class="k">verdict</span><span><b>${esc(l.stage2_verdict||'confirmed')}</b> · ${esc(l.stage2_reason||'')}</span>
       <span class="k">type · region</span><span>${esc(l.biz_type||'—')} · ${l.is_bd?'বাংলাদেশি':'International'}</span>
       <span class="k">ঠিকানা</span><span>${(l.address&&l.address!=='-')?esc(l.address):'<span style="color:var(--muted)">— (scan-এ পাওয়া যায়নি)</span>'}</span>
-      <span class="k">জেলা/এলাকা</span><span>${(l.district&&l.district!=='-')?esc(l.district):'—'}</span>
+      <span class="k">এলাকা / জেলা</span><span>${(l.area&&l.area!=='-')?'<b style="color:#0891b2">'+esc(l.area)+'</b>':''}${(l.area&&l.area!=='-'&&l.district&&l.district!=='-')?' · ':''}${(l.district&&l.district!=='-')?esc(l.district):((l.area&&l.area!=='-')?'':'—')}</span>
       <span class="k">layers</span><span class="mono">${esc(l.layers||'')}</span>
       <span class="k">HTTP</span><span>${bn(l.http_status||0)}</span>
       <span class="k">phone</span><span class="mono">${esc(l.phone||'—')}</span>
-      <span class="k">scanned</span><span>${ago(l.ts)}</span></div>
+      <span class="k">scanned</span><span>${ago(l.ts)}</span>
+      ${(l.hostCount||1)>1?`<span class="k">আক্রান্ত host</span><span class="mono">${(l.hosts||[]).map(h=>esc(h)).join('<br>')}</span>`:''}</div>
      <div class="sec-t">আক্রান্ত পেজসমূহ (${bn(ev.length)})</div>${evHtml}
      <div class="sec-t">এক-ক্লিক outreach</div>
      <div class="out">
@@ -572,7 +937,7 @@ function openLeadObj(l){
        <a class="btn gg" target="_blank" rel="noopener" href="${googleQ(l)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg> Google প্রমাণ</a>
        <a class="btn gg" target="_blank" rel="noopener" href="${sucuri(l)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Sucuri scan</a>
        <button class="btn cp" onclick="navigator.clipboard.writeText(document.getElementById('pitchTxt').textContent);this.textContent='✓ copied'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> message copy</button>
-       <button class="btn" style="background:#fde8eb;color:#c0263a;border-color:#f3c2cb" onclick="rejectLead(${l.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg> এটা lead না</button>
+       <button class="btn" style="background:#fde8eb;color:#c0263a;border-color:#f3c2cb" onclick="rejectLead(${l.id},[${(l.ids||[]).filter(x=>x!=null).join(',')}])"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg> এটা lead না</button>
      </div>
      <div class="pitch" id="pitchTxt">${esc(p)}</div>`;
   document.getElementById('modalBg').classList.add('on');document.body.style.overflow='hidden';
@@ -580,8 +945,58 @@ function openLeadObj(l){
 function closeModal(){document.getElementById('modalBg').classList.remove('on');document.body.style.overflow='';}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
-async function loadFeed(){try{const r=await(await fetch(API+"/api/feed?limit=60",{cache:'no-store'})).json();const f=r.feed||[];
-  document.getElementById('feed').innerHTML=f.length?f.map(x=>{const h=x.kind==='harvest';const tag=h?'<span class="tag t-redirect">সংগ্রহ</span>':'<span class="tag t-gambling">hacked</span>';return `<div class="it"><span class="when">${ago(x.ts)}</span><div><div class="dom">${tag} ${esc(x.domain)}</div><div style="color:var(--muted);font-size:11.5px">${esc(x.detail)}</div></div></div>`;}).join(''):'<div class="empty">scan / harvest activity এলে এখানে live দেখা যাবে</div>';}catch(e){}}
+async function loadFeed(){try{const r=await(await fetch(API+"/api/feed?limit=60",{cache:'no-store'})).json();const f=r.feed||[];FEEDDATA=f;
+  document.getElementById('feed').innerHTML=f.length?f.map(x=>{const h=x.kind==='harvest';const tag=h?'<span class="tag t-redirect">সংগ্রহ</span>':'<span class="tag t-gambling">hacked</span>';return `<div class="it"><span class="when">${ago(x.ts)}</span><div><div class="dom">${tag} ${esc(x.domain)}</div><div style="color:var(--muted);font-size:11.5px">${esc(x.detail)}</div></div></div>`;}).join(''):'<div class="empty">scan / harvest activity এলে এখানে live দেখা যাবে</div>';
+  renderLiveProcess();}catch(e){}}
+// ---- live process panel (zero extra API — built purely from already-fetched STATS + FEEDDATA) ----
+function lpStat(l,v,inner){return `<div class="lp-stat"><div class="v">${v}</div><div class="l"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>${l}</div></div>`;}
+function renderLiveProcess(){
+  const s=STATS; if(!s||!s.counters)return;
+  const c=s.counters||{}, q=s.queue||{}, daily=s.daily||[], today=daily.length?daily[daily.length-1]:{};
+  const eng=(s.workers||[]).find(w=>w.worker_id==='cf-engine')||(s.workers||[])[0];
+  const nowS=Math.floor(Date.now()/1000);
+  // "last tick" = the REAL last completed scan (last_tick_ts counter), NOT cf-engine.last_seen — last_seen is the
+  // START-of-tick heartbeat that stays fresh even while scanning is stalled (that's why a 3.3h stall showed "56s
+  // ago"). Fall back to last_seen only if the counter is missing. running = a real tick within ~3 min.
+  const seen=eng?eng.last_seen:0, ltt=(c.last_tick_ts)||0, tickAgo=ltt?(nowS-ltt):(seen?nowS-seen:99999);
+  const liveShards=(eng&&eng.current_batch)?eng.current_batch:0, running=tickAgo<180;
+  // "queue বাকি" = the TRUE never-scanned count (pass_no=0 = s.unscanned), NOT the stale legacy `batches` table
+  // (q.ready.domains overcounts — the cron scanner uses pass_no, not batches).
+  const ready=(s.unscanned!=null)?s.unscanned:((q.ready&&q.ready.domains)||0), rate=s.rate_this_hour||0;
+  const nowHTML=`<div class="lp-now"><div class="rad ${running?'':'idle'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${running?'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>':'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'}</svg></div><div class="txt"><b>${running?`এখন: queue scan চলছে — ${bn(liveShards||8)} shard parallel`:'ইঞ্জিন restart হচ্ছে…'}</b><div>শেষ tick ${bn(tickAgo)} সেকেন্ড আগে · এই ঘণ্টায় ${bn(rate)}/hr · queue-তে ${bn(ready)} domain বাকি</div></div></div>`;
+  const nowEl=document.getElementById('lpNow'); if(nowEl)nowEl.innerHTML=nowHTML;
+  const mini=document.getElementById('liveProcMini'); if(mini)mini.innerHTML=nowHTML;
+  const grid=document.getElementById('lpGrid');
+  if(grid)grid.innerHTML=
+    lpStat('শেষ scan tick',bn(tickAgo)+'s আগে','<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')+
+    lpStat('rate (এই ঘণ্টা)',bn(rate)+'/hr','<path d="M3 12h4l3 8 4-16 3 8h4"/>')+
+    lpStat('আজ scanned',bn(today.scanned||0),'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>')+
+    lpStat('live shard',bn(liveShards||0)+'/৮','<rect x="2" y="3" width="20" height="7" rx="1.5"/><rect x="2" y="14" width="20" height="7" rx="1.5"/>')+
+    lpStat('queue বাকি',bn(ready),'<path d="M3 6h18M3 12h18M3 18h18"/>')+
+    lpStat('confirmed (live)',bn(s.confirmed_sites||0),'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>');
+  const steps=document.getElementById('lpSteps');
+  if(steps){
+    const fd=(FEEDDATA||[]).slice(0,7);
+    steps.innerHTML=fd.length?fd.map((x,i)=>{
+      const harvest=x.kind==='harvest';
+      const title=harvest?`<span class="src">${esc(x.domain)}</span> থেকে domain সংগ্রহ`:`<span style="color:var(--red);font-weight:700">hacked</span> — ${esc(x.domain)}`;
+      return `<div class="lp-step ${i===0?'cur':''}"><div class="tl"><div class="d"></div><div class="ln"></div></div><div class="bd2"><div><div class="t">${title}</div><div class="s">${esc((x.detail||'').slice(0,96))}</div></div><div class="age">${ago(x.ts)}</div></div></div>`;
+    }).join(''):'<div class="empty">activity আসছে…</div>';
+  }
+  const lph=document.getElementById('lpHint'); if(lph)lph.textContent=running?'● live':'○ idle';
+}
+// ---- shard fleet visual ----
+function renderFleet(s){
+  const box=document.getElementById('fleetBox'); if(!box)return;
+  const eng=(s.workers||[]).find(w=>w.worker_id==='cf-engine')||(s.workers||[])[0];
+  const TOTAL=8, nowS=Math.floor(Date.now()/1000), seen=eng?eng.last_seen:0, running=seen&&(nowS-seen)<150;
+  const live=running?Math.min(TOTAL,(eng&&eng.current_batch)||TOTAL):0;
+  let html='';
+  for(let i=0;i<TOTAL;i++){const isLive=i<live;
+    html+=`<div class="shard ${isLive?'live':''}"><div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/></svg></div><div class="nm">shard-${'০১২৩৪৫৬৭'[i]||i}</div><div class="st">${isLive?'scanning':'idle'}</div></div>`;}
+  box.innerHTML=html;
+  const wh=document.getElementById('wHint'); if(wh)wh.textContent=bn(live)+'/৮ live'+(eng?' · '+bn(eng.scanned_total)+' scanned':'');
+}
 
 // ---- manual scan ----
 function manRow(r){
@@ -637,14 +1052,43 @@ async function loadManualStore(){
 async function delManual(id){try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:id,status:'rejected'})});}catch(e){}loadManualStore();}
 async function delManualBatch(name){if(!confirm('পুরো "'+name+'" batch মুছবেন?'))return;const ids=MANUAL.filter(l=>(l.mbatch||'(নামহীন batch)')===name).map(l=>l.id);for(const id of ids){try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:id,status:'rejected'})});}catch(e){}}loadManualStore();}
 
-// ---- screenshots gallery (free thum.io hotlink — no storage, no Gemini token; covers ALL leads, auto for new) ----
-let curShotRegion='bd', curShotCat='', curShotView='grid', SHOTROWS=[], SHOT_REGION_ROWS=[], shotObs=null;
-function shotUrl(l,w){let u=(l&&(l.proof_url||('https://'+l.domain)))||'';if(!/^https?:\/\//.test(u))u='https://'+u;return 'https://image.thum.io/get/width/'+(w||500)+'/crop/640/'+u;}
-function shotErr(img){if(!img.dataset.fb){img.dataset.fb='1';img.src='https://s0.wp.com/mshots/v1/'+encodeURIComponent(img.dataset.u||'')+'?w=500';return;}img.onerror=null;img.style.display='none';const ld=img.parentElement.querySelector('.ld');if(ld){ld.style.display='';ld.textContent='preview নেই';}}
-function setShotRegion(el){curShotRegion=el.dataset.sr;el.parentElement.querySelectorAll('.chip[data-sr]').forEach(x=>x.classList.toggle('on',x===el));curShotCat='';renderShots();}
+// ---- screenshots gallery (free WordPress mShots hotlink — no storage, no Gemini token; covers ALL leads, auto for new) ----
+let curShotRegion='bd', curShotCat='', curShotView='grid', curShotBiz='', curShotSort='recent', SHOTROWS=[], SHOT_REGION_ROWS=[], shotObs=null;
+function setShotBiz(t){curShotBiz=t;renderShotBizBar();renderShotsGrid();}
+function setShotSort(v){curShotSort=v;renderShotsGrid();}
+function renderShotBizBar(){
+  const el=document.getElementById('shotBizBar');if(!el)return;
+  const types=[...new Set(SHOT_REGION_ROWS.map(l=>l.biz_type).filter(Boolean))].sort();
+  if(!types.length){el.style.display='none';el.innerHTML='';return;}
+  el.style.display='';
+  el.innerHTML=`<span class="lab" style="font-size:11.5px;color:var(--muted);font-weight:700">business:</span><span class="chip ${!curShotBiz?'on':''}" onclick="setShotBiz('')">সব</span>`+types.map(t=>`<span class="chip ${curShotBiz===t?'on':''}" onclick="setShotBiz('${esc(t)}')">${esc(t)}</span>`).join('');
+}
+// Screenshots — WordPress mShots (s0/s1/s2.wp.com/mshots): genuinely FREE, UNLIMITED, no key, returns a
+// REAL image (powers wordpress.com's own previews). thum.io was tried but its free tier is DEAD — it now
+// returns a "Image not authorized. Please sign-up for a paid account" placeholder AS a 200 image, so it
+// stuck. mShots' only cost is a "Generating…" placeholder on the FIRST hit for a never-seen URL, which we
+// poll away (it then caches server-side → instant for everyone after). Fallback: microlink (last resort).
+// PERF: on load we spread across the s0/s1/s2 mirrors and pre-warm the next cards so scrolling feels instant.
+function shotTarget(l){let u=(l&&(l.proof_url||('https://'+l.domain)))||'';if(!/^https?:\/\//.test(u))u='https://'+u;return u;}
+function shotUrl(l,w){const W=w||500,t=shotTarget(l);const m=(Math.abs((t.charCodeAt(t.length-1)||0)+(t.length))%3);return 'https://s'+m+'.wp.com/mshots/v1/'+encodeURIComponent(t)+'?w='+W+'&h='+Math.round(W*0.72);}
+function shotLoad(img){const ld=img.parentElement&&img.parentElement.querySelector('.ld');
+  // mShots' first hit is a ~400px "Generating…" placeholder; re-poll the SAME url (no cache-bust) until real.
+  if(!img.dataset.fb&&img.naturalWidth&&img.naturalWidth<=420){const n=(+img.dataset.try||0)+1;img.dataset.try=n;const url=img.dataset.real||img.src;img.dataset.real=url;
+    if(n<=6){if(ld){ld.style.display='';ld.textContent='screenshot তৈরি হচ্ছে…';}setTimeout(()=>{img.removeAttribute('src');img.src=url;},1200+900*n);return;}
+    return shotErr(img);}
+  if(ld)ld.style.display='none';}
+function shotErr(img){const u=img.dataset.u||'',tt=/^https?:\/\//.test(u)?u:'https://'+u,s=img.dataset.fb||'';
+  if(s===''){img.dataset.fb='ml';img.removeAttribute('src');img.src='https://api.microlink.io/?url='+encodeURIComponent(tt)+'&screenshot=true&meta=false&embed=screenshot.url';return;}
+  img.onerror=null;img.style.display='none';const ld=img.parentElement&&img.parentElement.querySelector('.ld');if(ld){ld.style.display='';ld.textContent='preview নেই';}}
+function setShotRegion(el){curShotRegion=el.dataset.sr;el.parentElement.querySelectorAll('.chip[data-sr]').forEach(x=>x.classList.toggle('on',x===el));curShotCat='';curShotBiz='';renderShots();}
 function setShotCat(el){curShotCat=el.dataset.sc;el.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===el));renderShotsGrid();}
 function setShotView(el){curShotView=el.dataset.sv;el.parentElement.querySelectorAll('.chip[data-sv]').forEach(x=>x.classList.toggle('on',x===el));renderShotsGrid();}
-function shotCard(l,i){const u=(l.proof_url||('https://'+l.domain));return `<div class="shotcard" onclick="openLeadObj(SHOTROWS[${i}])"><div class="shotimg"><div class="ld">screenshot…</div><img data-src="${shotUrl(l,500)}" data-u="${esc(u)}" onload="this.previousElementSibling.style.display='none'" onerror="shotErr(this)" alt=""><span class="cat tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></div><div class="shotmeta"><span class="d">${esc(l.domain)}</span></div></div>`;}
+// The card is named for the ORGANISATION, not the individual host — the owner recognises "buet.ac.bd", not
+// "reunion.sherebanglahall.buet.ac.bd". When more than one of its hosts is compromised that becomes a badge,
+// which is also the strongest thing to open the outreach with.
+function shotCard(l,i){const u=(l.proof_url||('https://'+l.domain));const org=l.apex||l.domain;
+  const multi=(l.hostCount||1)>1?`<span class="hostn" title="${esc((l.hosts||[]).join(', '))}">${bn(l.hostCount)}টি host</span>`:'';
+  return `<div class="shotcard" onclick="openLeadObj(SHOTROWS[${i}])"><div class="shotimg"><div class="ld">screenshot…</div><img data-src="${shotUrl(l,500)}" data-u="${esc(u)}" onload="shotLoad(this)" onerror="shotErr(this)" alt=""><span class="cat tag t-${l.category}">${CAT[l.category]||l.category||'?'}</span></div><div class="shotmeta"><span class="d">${esc(org)}</span>${multi}</div></div>`;}
 function renderShotCats(rows){
   const cats={};rows.forEach(l=>{cats[l.category]=(cats[l.category]||0)+1;});
   const order=['gambling','redirect','malware','deface','pharma','adult','cloak','foreign_lang'].filter(c=>cats[c]);
@@ -660,19 +1104,23 @@ function renderShots(){
   const grid=document.getElementById('shotgrid');if(!grid)return;
   SHOT_REGION_ROWS=LEADS.filter(l=>(curShotRegion==='all'||(curShotRegion==='bd'?l.is_bd:!l.is_bd)));
   renderShotCats(SHOT_REGION_ROWS);
+  renderShotBizBar();
   renderShotsGrid();
 }
 function renderShotsGrid(){
   const grid=document.getElementById('shotgrid');if(!grid)return;
-  SHOTROWS=SHOT_REGION_ROWS.filter(l=>(!curShotCat||l.category===curShotCat));
+  SHOTROWS=SHOT_REGION_ROWS.filter(l=>(!curShotCat||l.category===curShotCat)&&(!curShotBiz||l.biz_type===curShotBiz));
+  if(curShotSort==='domain')SHOTROWS=SHOTROWS.slice().sort((a,b)=>(a.domain||'').localeCompare(b.domain||''));
+  else if(curShotSort==='biz')SHOTROWS=SHOTROWS.slice().sort((a,b)=>(a.biz_type||'~').localeCompare(b.biz_type||'~')||(a.domain||'').localeCompare(b.domain||''));
+  else if(curShotSort==='recent')SHOTROWS=SHOTROWS.slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
   document.getElementById('shotHint').textContent=bn(SHOTROWS.length)+' সাইট · scroll করলে screenshot load হবে';
   if(!SHOTROWS.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1">এই filter-এ সাইট নেই</div>';return;}
-  if(curShotView==='ip'){
+  if(curShotView==='ip'||curShotSort==='cluster'){
     const groups={};SHOTROWS.forEach((l,i)=>{const ip=(l.ip&&l.ip!=='cdn')?l.ip:'__none';(groups[ip]=groups[ip]||[]).push(i);});
     const keys=Object.keys(groups).sort((a,b)=>a==='__none'?1:b==='__none'?-1:groups[b].length-groups[a].length);
     grid.innerHTML=keys.map(ip=>{
-      const idxs=groups[ip],named=ip!=='__none';
-      const head=`<div class="ch" style="grid-column:1/-1;border:1px solid var(--line);border-radius:11px;margin-top:5px">${named?`<span class="ip">${esc(ip)}</span><span class="meta">এই server-এ ${bn(idxs.length)}টি hacked site</span>`:'<span class="ip" style="color:var(--muted)">IP এখনো জানা যায়নি</span>'}<span class="cnt">${bn(idxs.length)}</span></div>`;
+      const idxs=groups[ip],g=idxs.map(i=>SHOTROWS[i]);
+      const head=`<div class="ch" style="grid-column:1/-1;border:1px solid var(--line);border-radius:12px;margin-top:5px">${clusterHead(ip,g)}</div>`;
       return head+idxs.map(i=>shotCard(SHOTROWS[i],i)).join('');
     }).join('');
   }else{
@@ -681,8 +1129,12 @@ function renderShotsGrid(){
   lazyShots();
 }
 
-tick();loadLeads();loadFeed();
-setInterval(tick,15000);setInterval(loadFeed,15000);setInterval(loadLeads,30000);
+function bootApp(){tick();loadLeads();loadFeed();setInterval(tick,15000);setInterval(loadFeed,15000);setInterval(loadLeads,30000);
+// live-process ages tick every second from CACHED stats+feed only — no network, zero API/CF load
+setInterval(renderLiveProcess,1000);}
+async function doAuthLogin(){const u=(document.getElementById('authUser').value||'').trim(),p=document.getElementById('authPass').value||'';const er=document.getElementById('authErr');er.style.color='#64748b';er.textContent='…';try{const r=await fetch(API+'/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({user:u,pass:p})});const j=await r.json().catch(()=>({}));if(r.ok&&j.ok){er.style.color='#10b981';er.textContent='✓';location.reload();}else{er.style.color='#dc2626';er.textContent=j.error||'ভুল';}}catch(e){er.style.color='#dc2626';er.textContent='সমস্যা, আবার চেষ্টা করুন';}}
+async function authGate(){try{const r=await fetch(API+'/api/stats',{cache:'no-store'});if(r.status===401){document.getElementById('authGate').style.display='flex';return;}}catch(e){}document.getElementById('authGate').style.display='none';bootApp();}
+authGate();
 </script>
 </body>
 </html>

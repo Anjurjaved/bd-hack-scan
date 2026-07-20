@@ -59,6 +59,11 @@ SOURCE = "directories"
 # Hard cap on TOTAL listing pages fetched across all four sources per run.
 MAX_LISTINGS = int(os.environ.get("DIRECTORIES_MAX_LISTINGS", "1500"))
 
+# Per-source override: 0 = use each source's built-in budget (polite, bounded); >0 = cap EVERY source
+# at this many listing pages. Set high + raise DIRECTORIES_MAX_LISTINGS to pull a source's FULL sitemap
+# in one run (e.g. DIRECTORIES_PER_SOURCE=25000 DIRECTORIES_MAX_LISTINGS=40000 grabs all of bdtradeinfo).
+PER_SOURCE = int(os.environ.get("DIRECTORIES_PER_SOURCE", "0"))
+
 # Parallel page fetches. The work is network-bound, so threads help a lot;
 # kept modest to stay polite to these small directory hosts.
 WORKERS = max(1, int(os.environ.get("DIRECTORIES_WORKERS", "16")))
@@ -381,7 +386,7 @@ def _process_source(key, loader, dir_host, budget, state, remaining):
     *remaining* caps how many listing pages this source may still consume from
     the global MAX_LISTINGS budget. Returns (rows_dict, pages_fetched).
     """
-    take = min(budget, remaining)
+    take = min(PER_SOURCE or budget, remaining)
     if take <= 0:
         return {}, 0
 
@@ -444,8 +449,9 @@ def _process_source(key, loader, dir_host, budget, state, remaining):
 
 def main() -> int:
     state = _load_state()
-    collected: dict[str, dict] = {}
     used = 0  # listing pages consumed so far this run
+    total_unique = 0
+    total_inserted = 0
 
     for key, loader, dir_host, budget in SOURCES:
         remaining = MAX_LISTINGS - used
@@ -457,25 +463,25 @@ def main() -> int:
             key, loader, dir_host, budget, state, remaining
         )
         used += fetched
-        for dom, row in rows.items():
-            collected.setdefault(dom, row)
+        _save_state(state)  # persist the rotating offset per source as we go
+        src_rows = list(rows.values())
+        if not src_rows:
+            continue
+        total_unique += len(src_rows)
+        # push THIS source immediately so a long full pull never loses earlier sources if interrupted
+        try:
+            ins = harvest(SOURCE, src_rows)
+            total_inserted += ins
+            print(f"[directories] {key}: pushed {len(src_rows)} unique -> {ins} new",
+                  file=sys.stderr)
+        except Exception as e:  # noqa: BLE001
+            print(f"[directories] {key}: push failed: {e}", file=sys.stderr)
 
-    _save_state(state)
-
-    rows = list(collected.values())
-    if not rows:
+    if total_unique == 0:
         print("[directories] nothing collected this run", file=sys.stderr)
         return 0
-
-    print(f"[directories] collected {len(rows)} unique business domains "
-          f"from {used} pages, handing to harvest()", file=sys.stderr)
-    try:
-        inserted = harvest(SOURCE, rows)
-    except Exception as e:  # noqa: BLE001
-        print(f"[directories] harvest failed: {e}", file=sys.stderr)
-        return 1
-    print(f"[directories] done: {len(rows)} unique, {inserted} inserted",
-          file=sys.stderr)
+    print(f"[directories] done: {total_unique} unique across sources, "
+          f"{total_inserted} inserted, {used} pages", file=sys.stderr)
     return 0
 
 

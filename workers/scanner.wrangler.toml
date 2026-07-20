@@ -11,6 +11,9 @@ binding = "DB"
 database_name = "bd-hack-audit"
 database_id = "5a01635e-b9fe-4b28-a684-ba7007118f2a"
 
+# FREE plan → no custom [limits]. The shard 1102 is contained by the budgets below + fresh scan.js.
 [vars]
-SCAN_PER_TICK = "4"
+SCAN_PER_TICK = "3"
+SLICE_BUDGET_MS = "22000"
+DOMAIN_BUDGET_MS = "14000"
 GROQ_MODEL = "llama-3.1-8b-instant"

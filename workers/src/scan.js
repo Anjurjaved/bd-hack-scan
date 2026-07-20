@@ -4,6 +4,8 @@
 // (classify.py), optionally Groq Stage-2-verifies gambling hits, and ingests findings.
 // Free-tier safe: tiny batch per invocation, capped page reads, per-domain claim.
 import * as S from "./signatures.js";
+import * as F from "./layers/fetchers.js";
+import { MODULES, WEIGHTS as LAYER_W, CATS as LAYER_C } from "./layers/index.js";
 // re-export so the shared VM/Mac scanner (scanner/run.mjs) gets the SAME genuine-spam-brand test from this module.
 export const domainSpammy = (d) => S.domainSpammy(String(d || "").replace(/^www\./, ""));
 // Restricted BD institutional TLDs — allocated ONLY to real govt / university / college / military bodies (you can
@@ -12,6 +14,57 @@ export const domainSpammy = (d) => S.domainSpammy(String(d || "").replace(/^www\
 // confirm it as hacked WITHOUT spending an AI call, so these leads survive even when the Gemini/Groq pool is dry.
 export const BD_INST_TLD = /\.(gov|edu|ac|mil)\.bd$/i;
 export const BD_TLD = /\.bd$/i;
+
+// hasCustomer — is there a BUSINESS here to sell a cleanup to?
+//
+// This exists because 26 genuine porn sites reached the sales list, every one of them confirmed by the AI
+// answering "hacked_client". Chasing that with vocabulary does not work: their titles were "XXM Clips .Live -
+// Free Xxx Tube", "JAV HAY, Xem phim sex khiêu dâm miễn phí", "Tio Eroge - Juegos H", Bengali "অশ্লীল ভিডিও",
+// and three were behind a WAF showing only "Just a moment...". No regex covers every language's porn vocabulary,
+// and each new bare token risks a real BD business (চটি = sandal, XXXL = a garment size).
+//
+// So the question is inverted. A lead is worth money only if a real organisation is on the other end, and that
+// is cheap to establish positively:
+//   · a registrar-locked institutional TLD — nobody registers a porn brand on .gov.bd/.edu.bd/.ac.bd/.mil.bd
+//   · any .bd registrable — BTCL-gated, so it cannot be self-asserted the way .com/.top/.club can
+//   · a Bangladeshi phone number on the page — a business publishes one to be called; a tube page does not
+//   · a recognised business type — bizType() returning something other than "general-business"
+//
+// Measured against all 56: every one of the 9 genuine victims satisfies at least one; not one of the 26 porn
+// sites satisfies any (all were general-business on .com/.top/.club/.site/.digital/.skin/.beauty with no +880).
+export function hasCustomer(reg, sc) {
+  if (BD_INST_TLD.test(reg) || BD_TLD.test(reg)) return true;
+  if (sc && sc.contactPhone && S.RE.BD_PHONE.test(sc.contactPhone)) return true;
+  const biz = (sc && sc.bizType) || "";
+  return !!biz && biz !== "general-business";
+}
+
+// adultNeedsReview — the last line, and the one that does not depend on vocabulary.
+//
+// Measured on the 56: no keyword rule closes this category. The residue that beats every list is titled
+// "Tio Eroge - Juegos H", "Pompomhub.site", "Viral Video Link - Bangladeshi Viral Video Link", "LMHMOD - Tải
+// Game", "네트워크의 모든 것" — self-descriptions in languages and euphemisms no BD-safe token list can cover.
+// Widening the list is how চটি (sandal) and XXXL (a garment size) get destroyed, so it is not an option.
+//
+// So the category itself is treated as high-risk. Adult is the RAREST genuine lead type here (9 of 2,914) and
+// the most damaging to get wrong — a porn screenshot in a sales list sent to Bangladeshi schools. Only a
+// registrar-locked BD TLD, which nobody can register a porn brand on, auto-confirms. Everything else lands in
+// `review` for one-click approval, so a real victim is delayed, never lost, and a tube never publishes itself.
+export function adultNeedsReview(reg, category) {
+  if (category !== "adult") return false;
+  return !(BD_INST_TLD.test(reg) || BD_TLD.test(reg));
+}
+
+// DETECTOR GENERATION. Every domain row carries the generation of the detector that last looked at it.
+// Bumping this number is how a detector upgrade re-qualifies the ENTIRE corpus: every row with gen < this
+// is owed a fresh look, and the queue serves them ahead of the ordinary least-recently-scanned rotation.
+// It is deliberately separate from pass_no — pass_no counts how many times a site has been visited (and
+// re-scanning 300k domains through pass_no would double every "scanned" figure on the dashboard), whereas
+// gen answers a different question: has this row been seen by the CURRENT detector at all?
+//   gen 1 = the original 16-layer detector
+//   gen 2 = detector v2: reachability ladder (http:// fallback + www/apex swap + TLS-tolerant retry),
+//           ungated doorway discovery, and the new layer modules in ./layers/
+export const DETECTOR_GEN = 2;
 
 const UA_BR = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 const UA_GB = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
@@ -108,6 +161,64 @@ const CDN_IP = /^(104\.21\.|172\.67\.|104\.16\.|104\.1[789]\.|172\.6[456]\.|188\
 // io/co/me/tv/cc/ai and all gTLDs are intentionally EXCLUDED → they stay eligible for BD-by-IP).
 const FOREIGN_TLD = new Set("af al dz ad ao aq ag ar am au at az bs bh bb by be bz bj bm bt bo ba bw br bn bg bf bi kh cm ca cv cf td cl cn km cg cd cr ci hr cu cy cz dk dj dm do ec eg sv gq er ee et fj fi fr ga gm ge de gh gr gl gd gt gn gw gy ht hn hk hu is in id ir iq ie il it jm jp jo kz ke ki kp kr kw kg la lv lb ls lr ly lt lu mo mk mg mw my mv ml mt mh mr mu mx md mc mn ma mz mm na nr np nl nz ni ne ng no om pk pw pa pg py pe ph pl pt qa ro ru rw sa sn rs sc sl sg sk si sb so za es lk sd sr sz se ch sy tw tj tz th tg tn tr tm ug ua ae gb uk us uy uz vu ve vn ye zm zw".split(" "));
 function foreignCcTld(reg) { return FOREIGN_TLD.has((reg || "").split(".").pop()); }
+
+// ---- support for the v2 layer modules ----
+// dohAll: the modules' generic DNS helper. Returns the answer strings for any record type (dohA below stays
+// as-is because the BD-ness path only ever wants a single A record and is on the hot path for every flagged site).
+async function dohAll(name, type = "A") {
+  try {
+    const r = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`,
+      { headers: { accept: "application/dns-json" }, signal: AbortSignal.timeout(5000) });
+    const j = await r.json();
+    return (j.Answer || []).map((a) => a.data).filter(Boolean);
+  } catch (e) { return []; }
+}
+
+// URLhaus: one download serves every domain, so it is fetched once per isolate and reused. A failed load is
+// cached as an empty set for a short while rather than retried per domain — abuse.ch is a free service and a
+// 300k-domain re-scan must not turn into 300k requests against it.
+// IN-FLIGHT MEMOISATION is what actually enforces the "once per isolate" above. URLHAUS is only assigned AFTER
+// the await, and loadUrlhausHosts' own `_uh.set` guard is likewise only set post-await, so on a cold start (and
+// again at every TTL expiry) EVERY scan that reaches here before the first download completes used to start its
+// own. On the VM that is CONCURRENCY (400 by default) simultaneous multi-MB downloads plus 400 independent
+// ~35k-entry Sets built from 400 independent split() arrays — an OOM on the 946MB Oracle box, and precisely the
+// request burst against abuse.ch the note above forbids. Concurrent callers now share the one promise.
+let URLHAUS = null, URLHAUS_AT = 0, URLHAUS_INFLIGHT = null;
+async function urlhaus() {
+  const now = Date.now();
+  if (URLHAUS && now - URLHAUS_AT < 6 * 3600 * 1000) return URLHAUS;
+  if (URLHAUS_INFLIGHT) return await URLHAUS_INFLIGHT;
+  URLHAUS_INFLIGHT = (async () => {
+    try {
+      const mod = await import("./layers/links.js");
+      return await mod.loadUrlhausHosts({ timeoutMs: 20000 });
+    } catch (e) { return new Set(); }   // a failed load is cached as empty, exactly as before
+  })();
+  try {
+    URLHAUS = await URLHAUS_INFLIGHT;
+  } finally {
+    URLHAUS_AT = now;
+    URLHAUS_INFLIGHT = null;
+  }
+  return URLHAUS;
+}
+
+// Self-learned spam-host blocklist (L45KNOWNHOST). Injection campaigns reuse the same delivery hosts across
+// hundreds of victims, so a host already seen on confirmed victims is strong corroboration on the next one —
+// and it costs no HTTP request at all, which is what makes it the best-value layer in the set.
+// The list is mined from confirmed findings by GET /api/spamhosts and handed to the scanner through env, because
+// the VM (where the full detector runs) has no D1 access of its own. A host must appear on 3+ DISTINCT victims
+// before it counts, so one lead's own CDN can never become a signal.
+let SPAM_CACHE = null, SPAM_CACHE_SRC = "";
+function spamHosts(env) {
+  const src = (env && env.SPAM_HOSTS) || "";
+  if (SPAM_CACHE && src === SPAM_CACHE_SRC) return SPAM_CACHE;
+  SPAM_CACHE_SRC = src;
+  SPAM_CACHE = new Set(String(src).split(",").map((h) => h.trim().toLowerCase()).filter(Boolean));
+  return SPAM_CACHE;
+}
+
+function parseFp(s) { try { return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 
 async function dohA(name) {
   try {
@@ -219,12 +330,42 @@ const W = {
 const HARD = new Set(["L14CAMPAIGN", "L10DEFACE"]);
 const LAYER_CAT = { L2UACLOAK: "cloak", L3REFCLOAK: "cloak", L9REDIR: "redirect", L4MOBILE: "redirect", L16HDR: "redirect", L20RELAY: "redirect", L10DEFACE: "deface", L14CAMPAIGN: "malware", L8IFRAME: "malware", L10LANG: "foreign_lang", L20SCRIPT: "foreign_lang" };
 
+// Fold in the v2 layer modules. The weights declared HERE always win: three of the module layers
+// (L3REFCLOAK, L4MOBILE, L16HDR) were already weighted above and merely had no emit site, and a module
+// edit must never be able to silently reweight a live layer that the genuine-vs-hacked gate reads.
+for (const [k, v] of Object.entries(LAYER_W)) if (!W[k]) W[k] = v;
+for (const [k, v] of Object.entries(LAYER_C)) if (!LAYER_CAT[k]) LAYER_CAT[k] = v;
+
 function category(eff) {
   for (const s of eff) { const c = S.categoryOf(s.match); if (c) return c; }
   for (const pref of ["deface", "malware", "cloak", "redirect", "foreign_lang"]) {
     for (const s of eff) if (LAYER_CAT[s.layer] === pref) return pref;
   }
   return "gambling";
+}
+
+// selfSpam — is this homepage the adult/gambling PRODUCT rather than a business carrying injected spam?
+// Deliberately narrow, because a false positive here silently DROPS a genuine hacked lead. Two independent
+// tests, either of which is sufficient, both measured against the 56 confirmed-adult leads of 2026-07-20:
+//
+//   TITLE — the <title> is what a site declares itself to be. "Free Porn Videos & XXX Movies", "XXM Clips
+//   .Live - Free Xxx Tube", "Bangla Choti Golpo" are self-descriptions; no hacked business has one. Injected
+//   spam overwhelmingly leaves the title alone (a title-only injection exists but is handled by L37TITLEONLY,
+//   which reaches the AI, not this gate). This test alone caught 18 of the 26.
+//
+//   DENSITY — a real business page that mentions "casino" once in a news item scores ~1 hit in thousands of
+//   characters. A tube page is wall-to-wall: distinct strong terms repeated throughout a SHORT body. The
+//   threshold demands BOTH several distinct terms AND a short document, so a long editorial about the Dhaka
+//   casino raids (many hits, long body) does not qualify.
+//
+// A real BD business identity overrides neither test — that is decided in score(), not here.
+function isSelfSpam(title, visible) {
+  const t = String(title || "");
+  if (t && S.ALL_STRONG.test(t)) return true;
+  const body = String(visible || "");
+  if (body.length > 6000) return false;              // a substantial site is not a tube page
+  const distinct = new Set((body.match(S.REG.ALL_STRONG) || []).map((x) => x.toLowerCase()));
+  return distinct.size >= 3 && body.length < 4000;
 }
 
 function score(signals, ctx) {
@@ -258,15 +399,51 @@ function score(signals, ctx) {
     if (evidence.length >= 10) break;
   }
   // genuine-vs-hacked gate
-  const stealth = ["L2UACLOAK", "L3REFCLOAK", "L17HIDDEN", "L16HDR", "L20RELAY"].some((l) => layers.has(l));
-  const malwareDeface = ["L14CAMPAIGN", "L10DEFACE", "L8IFRAME"].some((l) => layers.has(l));
-  const doorway = ["L11REST", "L20SCRIPT", "L11SITEMAP", "L20SHAPE", "L4MOBILE"].some((l) => layers.has(l));
+  //
+  // selfSpam = the homepage IS the adult/gambling product, not a business carrying injected spam. Two doors
+  // let 26 genuine porn sites into the sales list before this existed, and both are closed here:
+  //
+  //  1. CLOAKING IS NOT VICTIMHOOD. A porn tube serves different content to Googlebot in order to rank, so
+  //     L2UACLOAK fires, `stealth` goes true, `hackFp` goes true, and the spam_site test below was skipped
+  //     entirely — the site went to the AI, which answered "hacked_client". That was the door for
+  //     potnhub.org, viexx.com, xxmclips.live, xxxrough.com, gayteam.club and kompoz2.com (all L2UACLOAK),
+  //     and for premiumplasticltd.com (L17HIDDEN). When the homepage itself is the product, hiding and
+  //     cloaking are how it operates, not evidence that someone else put it there.
+  //  2. BENGALI PORN IS NOT A BD BUSINESS IDENTITY. bdSignal() returns true on 15+ Bengali characters, so
+  //     banglachotigolpo1.com — whose homepage reads "বাংলা নতুন চুদাচুদির চটি" — satisfied `identity` and
+  //     took the protected path meant for real Bangladeshi businesses. Identity has to mean a BUSINESS is
+  //     there, so text that is itself the spam cannot supply it.
+  //
+  // Institutional victims stay safe: scanSlice checks BD_INST_TLD (.gov/.edu/.ac/.mil.bd) BEFORE this and
+  // confirms them even at status spam_site, because those TLDs are registrar-locked and cannot be a porn brand.
+  // The v2 layers are folded into the same three families. This matters more than it looks: the gate reads
+  // "spam hidden away from the homepage, on a site that still has a real business on its front page" as HACKED,
+  // and everything else openly spammy as a spam site to be dropped. A new layer that finds injected content in a
+  // feed, a search result or a doorway post but is not listed here would push its victim towards `spam_site`
+  // and quietly lose a genuine hacked lead.
+  const stealth = ["L2UACLOAK", "L3REFCLOAK", "L17HIDDEN", "L16HDR", "L20RELAY",
+    "L47URLCLOAK", "L51PARAMCLOAK", "L17HIDDEN2", "L50CONTRAST", "L51TAIL", "L52COMMENT", "L52NOSCRIPT",
+    "L24B64", "L25ESCAPE", "L25URL", "L26LOADER"].some((l) => layers.has(l));
+  const malwareDeface = ["L14CAMPAIGN", "L10DEFACE", "L8IFRAME", "L46URLHAUS", "L45KNOWNHOST",
+    "L48SHELL", "L49UPLOADPHP", "L57DRAINER"].some((l) => layers.has(l));
+  const doorway = ["L11REST", "L20SCRIPT", "L11SITEMAP", "L20SHAPE", "L4MOBILE",
+    "L38SMAPDEEP", "L32FOREIGNSLUG", "L33VOLUME", "L34LASTMOD", "L35ROBOTSPAM",
+    "L29FEED", "L29FEEDFOREIGN", "L30WPSEARCH", "L31SEARCH", "L52DOORBODY",
+    "L55CMSDOOR", "L53AMP", "L42SUBDOM", "L53SHAPE2", "L54SLUGSPAM"].some((l) => layers.has(l));
   const homepageOpen = layers.has("L1KW_STRONG");
+  // NOTE — the `doorway` term is currently INERT, and the list above is documentation only. hackFp is read at
+  // exactly one place (the spam_site test below) and that read is already inside `homepageOpen && …`, so
+  // `!homepageOpen` is false there by construction and hackFp always reduces to `stealth || malwareDeface`.
+  // Adding or removing a doorway id cannot change any verdict for any input. That is deliberate and must stay
+  // that way until it is measured: dropping the `!homepageOpen` guard would let doorway-only evidence pull
+  // openly-spammy no-identity sites out of the free spam_site drop and into the Gemini/Groq queue, which is
+  // the token burn CLAUDE.md exists to prevent. Keep the ids listed so a future change has the full set.
   const hackFp = stealth || malwareDeface || (doorway && !homepageOpen);
   const spammy = !!(ctx && ctx.domainSpammy);
-  const identity = !!(ctx && ctx.bdSignal);
+  const selfSpam = !!(ctx && ctx.selfSpam);
+  const identity = !!(ctx && ctx.bdSignal) && !selfSpam;
   let status, confirmed, flagged;
-  if (spammy || (homepageOpen && !hackFp && !identity)) { status = "spam_site"; confirmed = 0; flagged = false; }
+  if (spammy || selfSpam || (homepageOpen && !hackFp && !identity)) { status = "spam_site"; confirmed = 0; flagged = false; }
   else if (verdict === "CONFIRM_CANDIDATE") { status = "lead"; confirmed = 1; flagged = true; }
   else if (verdict === "SUSPECT") { status = "review"; confirmed = 0; flagged = true; }
   else { status = "clean"; confirmed = 0; flagged = false; }
@@ -281,14 +458,31 @@ function score(signals, ctx) {
 // ---- one domain ----
 export async function scanDomain(env, rec, deadline) {
   const overBudget = () => deadline && Date.now() > deadline;   // per-domain hard cap → skip the heavy enumeration
+  // PROFILE decides how much detector a domain gets. "full" is the Oracle VM: real cores, no CPU ceiling, so it
+  // runs the reachability ladder and every v2 layer module. "light" is the Cloudflare shards, which live under
+  // the free-plan CPU wall that produced error 1102 and froze this engine for 3.3 hours — they keep the original
+  // two-fetch detector and act as continuity, while the VM does the deep work.
+  const FULL = String((env && env.SCAN_PROFILE) || "light") === "full";
   const d = (rec.domain || "").trim().toLowerCase();
   const reg = d.replace(/^www\./, "");
-  const base = "https://" + d;
   const sigs = [];
   const emit = (bucket, layer, match, url = "") => sigs.push({ bucket, layer, match: String(match).slice(0, 200), url });
 
-  const B = await fetchPage(base, UA_BR, null);
-  if (B.status === 0) return { error: "unreachable" };
+  // THE RECHABILITY LADDER. https-only is why 68,568 domains — 43% of the corpus — carry dead=1 without ever
+  // having been scanned: an http-only site, an expired certificate or a hostname mismatch all fail the connect
+  // and look identical to "this domain does not exist". Neglected and already-compromised sites are exactly the
+  // population with broken TLS, so that flag was hiding the most hack-dense slice of the database.
+  let B, base;
+  if (FULL) {
+    const R = await F.resolveBase(d, { ua: UA_BR, overBudget, knownBase: rec.base || "" });
+    if (!R.status) return { error: "unreachable" };
+    base = R.base;
+    B = { status: R.status, finalUrl: R.finalUrl, text: R.text, headers: R.headers, chain: R.chain };
+  } else {
+    base = "https://" + d;
+    B = await fetchPage(base, UA_BR, null);
+    if (B.status === 0) return { error: "unreachable" };
+  }
   const G = await fetchPage(base, UA_GB, REF_G);
 
   const visB = stripHtml(B.text);
@@ -381,9 +575,22 @@ export async function scanDomain(env, rec, deadline) {
     }
   } catch (e) { /* not WP / blocked — fine */ }
 
-  // L11SITEMAP / L20SHAPE — sitemap doorway (gated: only when something already smells, to save fetches;
-  // and skipped once the per-domain budget is blown — a giant sitemap tree is the other big CPU/wall hog).
-  if (sigs.length > 0 && !overBudget()) {
+  // L11SITEMAP / L20SHAPE — sitemap doorway discovery.
+  // The `sigs.length > 0` gate is the second-biggest false-negative in the old detector: the canonical modern
+  // SEO-spam hack (Japanese-keyword, Indonesian slot doorways) leaves the homepage byte-for-byte untouched and
+  // injects thousands of doorway URLs reachable only through the sitemap. Those sites produce no homepage signal,
+  // so the gate holds and the sitemap is never fetched — the highest-value hack class was structurally invisible.
+  // On the VM the gate is therefore removed; the shards keep it, because there the extra fetches cost CPU budget.
+  // The ungating applies only when the homepage actually served us a page. A WAF that answers 403 answers 403
+  // to /robots.txt and /sitemap_index.xml too, and in a traced scan those rejections were 2.3s each — pure cost
+  // for a guaranteed-empty result. A site with a real signal still gets the sitemap pass regardless, as before.
+  let sitemapN = 0;
+  const answered = B.status >= 200 && B.status < 300;
+  // `sigs.length > 0` was the original gate and it has the same control-signal flaw as the deep gate did:
+  // L18CHALLENGE fires on every WAF-fronted site, so this pass was already running against hosts that answer
+  // 403 to robots.txt and every sitemap URL. Count scoring signals only.
+  const smells = sigs.some((s) => s.bucket !== "control");
+  if (((FULL && answered) || smells) && !overBudget()) {
     try {
       const rob = await fetchPage(base + "/robots.txt", UA_GB, null, 8000);
       let smaps = [...(rob.text || "").matchAll(/sitemap:\s*(https?:\/\/\S+)/gi)].map((m) => m[1]);
@@ -401,6 +608,7 @@ export async function scanDomain(env, rec, deadline) {
         const su = [...new Set([...sm.matchAll(/https?:\/\/[^<\s"]+/gi)].map((m) => m[0]))].filter((u) => u.includes(reg) && !u.toLowerCase().endsWith(".xml") && S.RE.SLUG_SPAM.test(u)).slice(0, 3);
         if (su.length) emit("sitemap-doorway", "L11SITEMAP", su.join(";"), su[0]);
         const locs = [...sm.matchAll(/<loc>\s*([^<\s]+)/gi)].map((m) => m[1]);
+        sitemapN = locs.length;   // handed to dnsfp: a sitemap that triples between scans is mass injection
         let gib = 0;
         for (const u of locs) {
           if (!u.includes(reg)) continue;
@@ -412,7 +620,64 @@ export async function scanDomain(env, rec, deadline) {
     } catch (e) { /* sitemap missing/blocked — fine */ }
   }
 
-  const sc = score(sigs, { domainSpammy: S.domainSpammy(reg), bdSignal: S.bdSignal(reg, visB) });
+  // ---- detector v2 layer modules ----
+  // Full profile only. Each module owns one evidence family, declares its own weights, and cannot decide a
+  // verdict — the genuine-vs-hacked gate below still has the last word. A module that throws is skipped, never
+  // fatal: one bad regex must not cost the whole scan.
+  let fpNow = null;
+  if (FULL && !overBudget()) {
+    // Tier 2 (web-shell probes, uploads listing, exposed .git, AMP, TLS forensics) costs several extra requests
+    // per domain, so it is spent only where something already smells. On a clean corpus that is a few percent
+    // of domains, which is what keeps a 300k re-scan affordable on one OCPU.
+    //
+    // Two conditions, both learned by tracing a real scan rather than by reasoning about it:
+    //  1. `control` signals do not count. L18CHALLENGE fires on every WAF-protected site, so a raw
+    //     `sigs.length > 0` promoted every Cloudflare-fronted site to the deep tier — measured on bracu.ac.bd:
+    //     28 requests, 36s, verdict clean. The fuser has always excluded `control` from scoring; this gate
+    //     simply has to agree with it.
+    //  2. The homepage must have actually answered 2xx. Against a 403/401/429 every probe returns the same
+    //     403 from the WAF, so the whole tier is guaranteed to learn nothing — and those rejections were the
+    //     slowest requests in the trace, 1-6s each.
+    const deep = answered && sigs.some((s) => s.bucket !== "control");
+    // A truncated read means the footer was cut off — and footer link injection is the single most common
+    // WordPress spam placement, so it is worth one Range request to go get the tail we threw away.
+    const tail = (B.text || "").length >= 96000 && !overBudget() ? await F.fetchTail(base, UA_BR).catch(() => "") : "";
+    const ctx = {
+      reg, base, B, G, visB, visG, tail, S,
+      fetchPage: F.fetchPage, fetchManual: F.fetchManual, followChain: F.followChain, fetchTail: F.fetchTail,
+      doh: dohAll, stripHtml, distinct, hostOf, sameHost,
+      UA_BR, UA_GB, UA_MOB: F.UA_MOB, REF_G,
+      overBudget, deep, sitemapN,
+      budget: { fetches: deep ? 14 : 6 },
+      spamHosts: spamHosts(env),
+      urlhausHosts: await urlhaus(),
+      prevFp: parseFp(rec.fp),
+      // doorway URLs discovered by the sitemap and content-enumeration layers, so the per-URL cloak check has
+      // somewhere to look. Populated as modules run — cloak.js is ordered last for exactly this reason.
+      doorways: [],
+    };
+    for (const m of MODULES) {
+      if ((m.TIER || "t1") === "t2" && !ctx.deep) continue;
+      if (overBudget()) break;
+      try {
+        const out = await m.run(ctx);
+        if (Array.isArray(out)) for (const s of out) if (s && s.layer && s.bucket) sigs.push(s);
+      } catch (e) { /* a module failure is never fatal to the scan */ }
+      // A module that produced the first real signal promotes the rest of the run to the deep tier — but by
+      // the same rule as above: scoring signals only, and only on a site that actually served us a page.
+      ctx.deep = ctx.deep || (answered && sigs.some((s) => s.bucket !== "control"));
+      ctx.doorways = sigs.filter((s) => s.bucket === "sitemap-doorway" || s.bucket === "content-enum").map((s) => s.url).filter(Boolean).slice(0, 12);
+    }
+    fpNow = ctx.fpNow || null;
+  }
+
+  const sc = score(sigs, {
+    domainSpammy: S.domainSpammy(reg),
+    bdSignal: S.bdSignal(reg, visB),
+    selfSpam: isSelfSpam(ttl, visB),
+  });
+  sc.fp = fpNow ? JSON.stringify(fpNow).slice(0, 1200) : "";
+  sc.base = base;
   sc.title = ttl;
   sc.excerpt = visB.slice(0, 1800);
   sc.httpStatus = B.status;
@@ -558,8 +823,19 @@ export async function scanSlice(env, n) {
     const c = rows.slice(i, i + 90).map((r) => r.rowid);
     try { await env.DB.prepare(`UPDATE domains SET pass_no=pass_no+1 WHERE rowid IN (${c.map(() => "?").join(",")})`).bind(...c).run(); } catch (e) {}
   }
-  const findings = [], rowids = [], dead = [], parked = [];
+  const findings = [], rowids = [], dead = [], parked = [], cleared = [];
   let errors = 0;
+  // A re-scan that finds a previously-confirmed site CLEAN must be able to retract the lead — otherwise a lead
+  // confirmed by a buggy detector is permanent, which is how genuine porn brands ended up in the sales list and
+  // stayed there. `cleared` carries only DEFINITE negatives: the site answered, and the current gate says it is
+  // not a hacked victim. An unreachable site, a timeout, or a gambling/adult hit we could not put to the AI is
+  // never cleared — losing a real lead because the server blipped during one re-scan is the worse error.
+  // The 2xx test is what makes "the site answered" true rather than merely intended. `unreachable` is only
+  // returned when the TRANSPORT fails, so a WAF 403, a rate-limit 429 (this engine runs 400-way concurrency
+  // against shared BD hosting, so 429 is routine), a 503 or a captcha interstitial all reach the gate as a
+  // normal scan — and produce nothing but the L18CHALLENGE control signal, which score() strips, giving
+  // verdict CLEAN. Without this test one WAF-blocked re-scan retracts a genuinely hacked lead.
+  const clear = (r, sc) => { const s = sc && sc.httpStatus; if (s >= 200 && s < 300) cleared.push(r.domain); };
   // BUDGETS (the anti-1102 / anti-deadlock guard). A single heavy WordPress site (big sitemap + hundreds of
   // REST posts) used to burn the whole invocation's CPU/wall budget → the shard 1102'd BEFORE returning, so
   // its rowids were never marked done and that poison domain sat at the head of the slice forever, 1102-ing
@@ -587,17 +863,34 @@ export async function scanSlice(env, n) {
     }
     // Not flagged: only PARK when the domain NAME itself is a gambling/adult brand (100% safe — no legit business is
     // named "iceporn"/"netbet"). A merely openly-spam foreign homepage stays droppable (re-scans later, never lost).
-    if (!sc.flagged) { if (sc.status === "spam_site" && S.domainSpammy(reg)) parked.push(r.rowid); continue; }
+    if (!sc.flagged) {
+      const nameSpam = S.domainSpammy(reg);
+      if (sc.status === "spam_site" && nameSpam) parked.push(r.rowid);
+      // RETRACT only on verdict `clean`. A `spam_site` verdict is NOT a negative: score() assigns it whenever the
+      // homepage is openly spammy and no BD/Bangla identity survives — which is exactly what a previously-partial
+      // injection looks like once the attacker replaces the WHOLE homepage and the Bengali content is gone. Clearing
+      // there would retract the lead at the moment the compromise became total. The one safe exception is a
+      // gambling/adult BRAND in the domain NAME (domainSpammy), which no real BD business ever carries.
+      if (sc.status === "clean" || nameSpam) clear(r, sc);
+      continue;
+    }
     let status = sc.status, confirmed = sc.confirmed, verdict = sc.verdict, reason = `posterior=${sc.posterior} buckets=${sc.nbuckets}${sc.hard ? " HARD" : ""}`, biz = sc.bizType;
     if (["gambling", "adult", "foreign_lang"].includes(sc.category)) {
       // 1) gambling/adult BRAND in the domain NAME → genuine spam → park, spend NO Gemini.
-      if (S.domainSpammy(reg)) { parked.push(r.rowid); continue; }
+      if (S.domainSpammy(reg)) { parked.push(r.rowid); clear(r, sc); continue; }
       else {
         const _ev = sc.evidence.map((e) => e.url + " " + e.match).join("; ");
         const v = (await geminiVerify(env, r.domain, sc.title, sc.excerpt, _ev)) || (await groqVerify(env, r.domain, sc.title, sc.excerpt, _ev));
         if (v) {
-          if (v.classification === "hacked_client") { status = "lead"; confirmed = 1; biz = v.business_type || biz; verdict = "ai-" + v.classification; reason = "ai:" + v.classification + " — " + v.reason; }
-          else continue;   // genuine_spam / false_positive → drop, allow a fresh re-scan. NOT parked: a BD business often
+          // The AI saying "hacked_client" is necessary but NOT sufficient. It answered exactly that for all 26
+          // porn sites that reached the sales list. A lead has to have someone to sell to.
+          if (v.classification === "hacked_client" && !hasCustomer(reg, sc)) { clear(r, sc); continue; }
+          if (v.classification === "hacked_client") {
+            biz = v.business_type || biz; verdict = "ai-" + v.classification; reason = "ai:" + v.classification + " — " + v.reason;
+            if (adultNeedsReview(reg, sc.category)) { status = "review"; confirmed = 0; reason = "adult on a non-.bd domain — needs human approval before it becomes a lead"; }
+            else { status = "lead"; confirmed = 1; }
+          }
+          else { clear(r, sc); continue; }   // genuine_spam / false_positive → drop, allow a fresh re-scan. NOT parked: a BD business often
                             // uses a .com and the AI can misjudge it as genuine_spam — parking would lose a real hacked
                             // BD lead forever. Only a gambling/adult BRAND in the NAME (domainSpammy, above) is parked.
         } else {
@@ -615,12 +908,15 @@ export async function scanSlice(env, n) {
     // ad-malware/popunder/redirect layers, so its category resolves to malware/redirect and that was the exact door
     // it walked through into the lead list. Reuses the SAME narrow high-precision brand list as the GA branch above,
     // so it adds ZERO new false-positive surface for real BD businesses (no Bangla/leet tokens are involved here).
-    if (S.domainSpammy(reg)) { parked.push(r.rowid); continue; }
+    if (S.domainSpammy(reg)) { parked.push(r.rowid); clear(r, sc); continue; }
     // (non-GA categories — malware/deface/cloak/redirect — reach here and push directly; they need no AI. A spam_site
     // is always flagged=false and was already handled by the !sc.flagged guard above, so no branch is needed here.)
     findings.push({ domain: r.domain, business: r.business, phone: r.phone || sc.contactPhone, category: sc.category, layers: sc.layers.join(","), proof: sc.proof, proofUrl: sc.proofUrl, httpStatus: sc.httpStatus, nbuckets: sc.nbuckets, verdict, reason, confirmed, evidence: sc.evidence, isBd: sc.isBd, bizType: biz, status, address: sc.address, district: sc.district, area: sc.area, ip: sc.ip });
   }
-  return { rowids, findings, scanned: rows.length, errors, dead, parked };
+  // No `gen` here on purpose. scanSlice is what the Cloudflare shards run, and they run the LIGHT profile under
+  // the free-plan CPU wall. Claiming v2-qualification for a cheap scan would rob the domain of the deep pass it
+  // is queued for. Only the VM, which runs the full detector, sends gen (see scanner/run.mjs).
+  return { rowids, findings, scanned: rows.length, errors, dead, parked, cleared };
 }
 
 // ingestResults — the SINGLE writer. Marks all scanned rowids done + writes findings + stats
@@ -639,13 +935,31 @@ export async function ingestResults(env, agg) {
   const deadSet = new Set(agg.dead || []);
   const reached = rowids.filter((id) => !deadSet.has(id));
   const deadRows = [...deadSet];
+  // gen is stamped ONLY by a scanner that actually ran the full detector — the VM sends its DETECTOR_GEN on
+  // /vm-push; the Cloudflare shards, which run the light profile under the free-plan CPU wall, send nothing and
+  // therefore never claim a row as v2-qualified. Without that asymmetry a shard's cheap scan would stamp gen=2
+  // and quietly rob the domain of the deep pass it was queued for.
+  // When it IS stamped, it goes on every attempted row, reachable or not: a domain the v2 reachability ladder
+  // still cannot reach HAS been re-qualified by v2, and leaving it behind would pin it at the head of the
+  // re-scan queue forever and starve the rows that can actually be scanned.
+  const gen = Number(agg.gen) || 0;
+  const setGen = gen ? ", gen=" + gen : "";
+  // Persist each domain's fingerprint and working origin. This is what makes the NEXT scan able to ask the
+  // single most discriminating free question there is — "what changed since last time?" — and it is written for
+  // every scanned domain, not just the flagged ones, because the whole value is catching a CLEAN site the day
+  // it turns dirty. One statement per 45 rows, only for domains whose fingerprint actually moved.
+  for (const f of (agg.fps || []).slice(0, 600)) {
+    if (!f || !f.rowid) continue;
+    stmts.push(env.DB.prepare("UPDATE domains SET fp=?, base=? WHERE rowid=?")
+      .bind(String(f.fp || "").slice(0, 1200), String(f.base || "").slice(0, 120), f.rowid));
+  }
   for (let i = 0; i < reached.length; i += 90) {
     const chunk = reached.slice(i, i + 90);
-    stmts.push(env.DB.prepare(`UPDATE domains SET dead=0 WHERE rowid IN (${chunk.map(() => "?").join(",")})`).bind(...chunk));
+    stmts.push(env.DB.prepare(`UPDATE domains SET dead=0${setGen} WHERE rowid IN (${chunk.map(() => "?").join(",")})`).bind(...chunk));
   }
   for (let i = 0; i < deadRows.length; i += 90) {
     const chunk = deadRows.slice(i, i + 90);
-    stmts.push(env.DB.prepare(`UPDATE domains SET dead=1 WHERE rowid IN (${chunk.map(() => "?").join(",")})`).bind(...chunk));
+    stmts.push(env.DB.prepare(`UPDATE domains SET dead=1${setGen} WHERE rowid IN (${chunk.map(() => "?").join(",")})`).bind(...chunk));
   }
   // PARK genuine gambling/adult brands (pass_no=9000, a sentinel far above any real pass count). This drops them
   // out of the re-scan rotation (ORDER BY pass_no ASC never reaches them) AND out of the clean/safe-site list
@@ -656,17 +970,41 @@ export async function ingestResults(env, agg) {
     const chunk = parkRows.slice(i, i + 90);
     stmts.push(env.DB.prepare(`UPDATE domains SET pass_no=9000 WHERE rowid IN (${chunk.map(() => "?").join(",")})`).bind(...chunk));
   }
+  // RETRACTION. A domain the current detector scanned successfully and judged NOT a hacked victim gives up any
+  // confirmed finding it still carries. The row is demoted rather than deleted — status='cleared' keeps the
+  // history visible, so a lead that vanishes can be explained instead of just disappearing from the dashboard.
+  // Only domains that carry a confirmed finding are touched; for the overwhelming majority of a batch this
+  // matches nothing and costs one indexed lookup.
+  const clearedRows = (agg.cleared || []).filter(Boolean);
+  for (let i = 0; i < clearedRows.length; i += 90) {
+    const chunk = clearedRows.slice(i, i + 90);
+    stmts.push(env.DB.prepare(
+      `UPDATE findings SET confirmed=0, status='cleared', stage2_reason='re-scan under detector gen ${gen || "?"}: no longer a hacked victim', ts=? WHERE confirmed=1 AND domain IN (${chunk.map(() => "?").join(",")})`
+    ).bind(now, ...chunk));
+  }
   const catc = Object.fromEntries(CATS.map((c) => [c, 0]));
   let flagged = 0, confirmed = 0;
   for (const f of findings) {
     flagged++;
     const conf = f.confirmed ? 1 : 0;
     if (conf) { confirmed++; if (catc[f.category] !== undefined) catc[f.category]++; }
-    stmts.push(env.DB.prepare("DELETE FROM findings WHERE domain=?").bind(f.domain));
+    // Upsert on the unique domain index rather than DELETE-then-INSERT. Two reasons: the delete/insert pair was
+    // not atomic and had left 38 duplicate rows behind, and it reset first_ts on every pass — so a lead found in
+    // June looked like it was found today, which is exactly the field the outreach copy leans on. COALESCE keeps
+    // the original discovery time and only the current-state columns move.
     stmts.push(env.DB.prepare(
-      "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage1_score,stage2_verdict,stage2_reason,stage2_category,confirmed,pass_no,first_ts,ts,evidence,is_bd,biz_type,status,address,district,area,ip) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).bind(f.domain, (f.business || "").slice(0, 200), (f.phone || "").slice(0, 40), f.category, (f.layers || "").slice(0, 200), (f.proof || "").slice(0, 600), (f.proofUrl || "").slice(0, 300), f.httpStatus || 0, f.nbuckets || 0, (f.verdict || "").slice(0, 20), (f.reason || "").slice(0, 400), f.category, conf, 1, now, now, JSON.stringify(f.evidence || []).slice(0, 4000), f.isBd ? 1 : 0, (f.bizType || "").slice(0, 30), (f.status || "lead").slice(0, 16), (f.address || "").slice(0, 200), (f.district || "").slice(0, 40), (f.area || "").slice(0, 40), (f.ip || "").slice(0, 45)));
-    if (conf) stmts.push(env.DB.prepare("INSERT INTO events (kind,domain,detail,ts) VALUES ('confirmed',?,?,?)").bind(f.domain, (f.category + " | " + (f.proof || "")).slice(0, 200), now));
+      "INSERT INTO findings (domain,business,phone,category,layers,proof_snippet,proof_url,http_status,stage1_score,stage2_verdict,stage2_reason,stage2_category,confirmed,pass_no,first_ts,ts,evidence,is_bd,biz_type,status,address,district,area,ip,apex) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) " +
+      "ON CONFLICT(domain) DO UPDATE SET apex=excluded.apex, business=excluded.business, phone=excluded.phone, category=excluded.category, layers=excluded.layers, proof_snippet=excluded.proof_snippet, proof_url=excluded.proof_url, http_status=excluded.http_status, stage1_score=excluded.stage1_score, stage2_verdict=excluded.stage2_verdict, stage2_reason=excluded.stage2_reason, stage2_category=excluded.stage2_category, confirmed=excluded.confirmed, ts=excluded.ts, evidence=excluded.evidence, is_bd=excluded.is_bd, biz_type=excluded.biz_type, status=excluded.status, address=excluded.address, district=excluded.district, area=excluded.area, ip=excluded.ip, first_ts=COALESCE(findings.first_ts, excluded.first_ts)"
+    ).bind(f.domain, (f.business || "").slice(0, 200), (f.phone || "").slice(0, 40), f.category, (f.layers || "").slice(0, 200), (f.proof || "").slice(0, 600), (f.proofUrl || "").slice(0, 300), f.httpStatus || 0, f.nbuckets || 0, (f.verdict || "").slice(0, 20), (f.reason || "").slice(0, 400), f.category, conf, 1, now, now, JSON.stringify(f.evidence || []).slice(0, 4000), f.isBd ? 1 : 0, (f.bizType || "").slice(0, 30), (f.status || "lead").slice(0, 16), (f.address || "").slice(0, 200), (f.district || "").slice(0, 40), (f.area || "").slice(0, 40), (f.ip || "").slice(0, 45),
+      // derived here, in the single writer, rather than at every call site — a finding that reaches D1 without
+      // an organisation would silently reappear as its own lead card and undo the whole rollup
+      S.registrableOf(f.domain)));
+    // Only announce a FIRST confirmation. Re-scanning the confirmed set (which detector v2 now does, so a bad
+    // lead can be retracted) would otherwise republish the same lead into the live feed on every pass — the
+    // duplicate-"confirmed"-event noise the owner already reported once.
+    if (conf) stmts.push(env.DB.prepare(
+      "INSERT INTO events (kind,domain,detail,ts) SELECT 'confirmed',?,?,? WHERE NOT EXISTS (SELECT 1 FROM events WHERE kind='confirmed' AND domain=?)"
+    ).bind(f.domain, (f.category + " | " + (f.proof || "")).slice(0, 200), now, f.domain));
   }
   const day = dDay(now), hour = dHour(now);
   const catSet = CATS.map((c) => `${c}=${c}+${catc[c]}`).join(",");
@@ -678,7 +1016,11 @@ export async function ingestResults(env, agg) {
   stmts.push(env.DB.prepare("UPDATE counters SET value=value+? WHERE metric='total_flagged'").bind(flagged));
   stmts.push(env.DB.prepare("UPDATE counters SET value=value+? WHERE metric='total_confirmed'").bind(confirmed));
   stmts.push(env.DB.prepare("UPDATE counters SET value=value+? WHERE metric='total_errors'").bind(errors));
-  if (stmts.length) await env.DB.batch(stmts);
+  // Execute in chunks rather than as one giant batch. A 300-domain VM push now carries up to 300 fingerprint
+  // UPDATEs on top of the row-marking, finding and stats statements, and a batch that size fails as a whole —
+  // which cost a real outage: every push returned ok:true while NOTHING was written, because vmPush swallowed
+  // the throw. Chunking keeps each batch inside D1's limits, and a chunk that does fail now propagates.
+  for (let i = 0; i < stmts.length; i += 80) await env.DB.batch(stmts.slice(i, i + 80));
   return { scanned, flagged, confirmed };
 }
 
@@ -706,7 +1048,12 @@ export async function scanOneVerified(env, domain) {
       const ev = sc.evidence.map((e) => e.url + " " + e.match).join("; ");
       const v = (await geminiVerify(env, domain, sc.title, sc.excerpt, ev)) || (await groqVerify(env, domain, sc.title, sc.excerpt, ev));
       if (v) {
-        if (v.classification === "hacked_client") { status = "lead"; confirmed = 1; }
+        // Same two gates as scanSlice. This path (POST /scan_manual and the dashboard's on-demand scan) had
+        // NEITHER, which is how jamsgroupbd.net and alaskancrowncruise.com re-confirmed themselves minutes
+        // after being moved to the review queue. Every path that can set confirmed=1 has to agree.
+        if (v.classification === "hacked_client" && !hasCustomer(reg, sc)) { status = "genuine_spam"; confirmed = 0; verdict = "no-customer"; reason = "no business identity found — nothing here to sell a cleanup to"; }
+        else if (v.classification === "hacked_client" && adultNeedsReview(reg, sc.category)) { status = "review"; confirmed = 0; verdict = "needs-review"; reason = "adult on a non-.bd domain — needs human approval before it becomes a lead"; }
+        else if (v.classification === "hacked_client") { status = "lead"; confirmed = 1; }
         else { status = v.classification; confirmed = 0; }
         biz = v.business_type || biz; verdict = "ai-" + v.classification; reason = "ai:" + v.classification + " — " + v.reason;
       } else {
