@@ -538,6 +538,11 @@ async function apiStats(env, ctx) {
   // counters → instant. Live-scan fallback only if the precomputed value is missing.
   const bdRow = (counters.bd_domains != null) ? { c: counters.bd_domains } : ((await env.DB.prepare("SELECT COUNT(*) c FROM domains WHERE domain LIKE '%.bd'").first()) || { c: 0 });
   const unscRow = (counters.unscanned != null) ? { c: counters.unscanned } : ((await env.DB.prepare("SELECT COUNT(*) c FROM domains WHERE pass_no=0").first()) || { c: 0 });
+  // "queue বাকি" used to render `unscanned` (pass_no=0), which drains to ~0 almost immediately and then sits
+  // next to "১,৯২,৪২৩ domain" telling the owner the work is finished. The honest number is how much of the
+  // corpus the DEEP detector has still never seen: only the VM stamps gen=DETECTOR_GEN, and 82% of the corpus
+  // has still only met the light shards, which skip the reachability ladder and all 61 v2 layers.
+  const deepRow = (await env.DB.prepare("SELECT COUNT(*) c FROM domains WHERE gen < ? AND dead=0").bind(DETECTOR_GEN).first()) || { c: 0 };
   const leadGeo = { bd: 0, intl: 0 };
   for (const r of (await env.DB.prepare("SELECT is_bd, COUNT(DISTINCT COALESCE(NULLIF(apex,''),domain)) c FROM findings WHERE confirmed=1 AND status!='rejected' AND (is_manual IS NULL OR is_manual=0) GROUP BY is_bd").all()).results || [])
     leadGeo[r.is_bd ? "bd" : "intl"] = r.c;
@@ -551,6 +556,7 @@ async function apiStats(env, ctx) {
     rate_this_hour: recentRate.s,
     bd_domains: bdRow.c,
     unscanned: unscRow.c,
+    deep_pending: deepRow.c,          // live domains the FULL detector has not adjudicated yet
     lead_geo: leadGeo,
     confirmed_sites: confirmedSites,                 // distinct hacked sites (live truth) — use this for the headline
     confirmed_lifetime: counters.total_confirmed || 0, // cumulative confirmation events (historical stat, not the live count)

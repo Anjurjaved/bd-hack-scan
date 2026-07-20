@@ -783,7 +783,7 @@ function renderStats(s){
     card('b-purple',IC.r,'rate (এই ঘণ্টা)',bn(s.rate_this_hour),'per hour')+
     card('b-gold',IC.f,'flagged',bn(c.total_flagged),conv.toString().replace(/[0-9]/g,d=>"০১২৩৪৫৬৭৮৯"[d])+'% conv')+
     card('b-red',IC.c,'CONFIRMED HACKED',bn(confSites),'আজ '+bn(today.confirmed||0))+
-    card('b-green',IC.q,'queue বাকি',bn(queued),(q.done?.batches?bn(q.done.batches)+' batch done':''));
+    card('b-green',IC.q,'deep scan বাকি',bn(s.deep_pending!=null?s.deep_pending:queued),(s.deep_pending!=null?'কখনো scan হয়নি '+bn(queued):(q.done?.batches?bn(q.done.batches)+' batch done':'')));
   let cs=0,cf=0,cc=0;const ds=[],df=[],dc=[];daily.forEach(d=>{cs+=d.scanned||0;cf+=d.flagged||0;cc+=d.confirmed||0;ds.push(cs);df.push(cf);dc.push(cc);});
   lineChart(document.getElementById('dailyChart'),[ds,df,dc],Math.max(cs,1),['var(--blue)','var(--gold)','var(--red)']);
   document.getElementById('dHint').textContent=bn(daily.length)+" দিন";
@@ -803,7 +803,7 @@ function renderStats(s){
     card('b-blue',IC.t,'মোট domain সংগ্রহ',bn(totDom),bn((s.sources||[]).length)+' way চালু')+
     card('b-green',IC.c,'বাংলাদেশি (.bd)',bn(bdDom),'বিক্রয়যোগ্য মূল target')+
     card('b-cyan',IC.s,'global / অন্যান্য',bn(glob),'lead কম মূল্যবান')+
-    card('b-gold',IC.f,'queue বাকি',bn(queued),(q.done?.batches?bn(q.done.batches)+' batch done':''));
+    card('b-gold',IC.f,'deep scan বাকি',bn(s.deep_pending!=null?s.deep_pending:queued),(s.deep_pending!=null?'কখনো scan হয়নি '+bn(queued):(q.done?.batches?bn(q.done.batches)+' batch done':'')));
   document.querySelector('#sources tbody').innerHTML=(s.sources||[]).length?s.sources.map(x=>{
     const info=SRC_INFO[x.source]||{d:'—',k:'mixed'},kk=KIND[info.k]||KIND.mixed;
     return `<tr><td style="font-weight:700">${esc(x.source)}</td><td style="color:var(--muted);font-size:11.5px;max-width:360px;white-space:normal">${info.d}</td><td><span class="tag" style="background:${kk.c}1f;color:${kk.c}">${kk.t}</span></td><td class="n" style="color:var(--green);font-weight:700">${bn(x.total_harvested)}</td><td>${ago(x.last_run)}</td></tr>`;

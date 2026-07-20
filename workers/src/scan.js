@@ -101,8 +101,31 @@ const RE_WS = /\s+/g;
 const RE_TITLE = /<title[^>]*>([\s\S]*?)<\/title>/i;
 const RE_HTMLLANGTITLE = /<html[^>]*\blang="([a-zA-Z]{2})/i;
 
+// Entities are DECODED, not blanked. Replacing them with a space is what let the accent guard be bypassed:
+// complement-nature.com writes "sp&eacute;cialis&eacute;", which blanked to "sp cialis " — so `cialis` sat
+// between two spaces, passed `(?<![\p{L}\p{N}])`, and the French shop was published as a pharma-spam lead.
+// Decoding restores "spécialisé", where the guard correctly refuses. Numeric forms and the Latin-1 accents are
+// what actually appear in the wild; anything else still falls back to a space, exactly as before.
+const ENT_NAMED = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+  aacute: "á", eacute: "é", iacute: "í", oacute: "ó", uacute: "ú", yacute: "ý",
+  agrave: "à", egrave: "è", igrave: "ì", ograve: "ò", ugrave: "ù",
+  acirc: "â", ecirc: "ê", icirc: "î", ocirc: "ô", ucirc: "û",
+  auml: "ä", euml: "ë", iuml: "ï", ouml: "ö", uuml: "ü", yuml: "ÿ",
+  atilde: "ã", ntilde: "ñ", otilde: "õ", ccedil: "ç", aring: "å", oslash: "ø", aelig: "æ", szlig: "ß",
+};
+function decodeEnt(s) {
+  return s.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, g) => {
+    if (g[0] === "#") {
+      const cp = g[1] === "x" || g[1] === "X" ? parseInt(g.slice(2), 16) : parseInt(g.slice(1), 10);
+      return Number.isFinite(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : " ";
+    }
+    const k = g.toLowerCase();
+    return Object.prototype.hasOwnProperty.call(ENT_NAMED, k) ? ENT_NAMED[k] : " ";
+  });
+}
 function stripHtml(h) {
-  return h.replace(RE_TAGSTRIP, " ").replace(RE_TAGS, " ").replace(RE_ENT, " ").replace(RE_WS, " ").trim();
+  return decodeEnt(h.replace(RE_TAGSTRIP, " ").replace(RE_TAGS, " ")).replace(RE_WS, " ").trim();
 }
 function getTitle(h) {
   const m = RE_TITLE.exec(h);
@@ -918,7 +941,12 @@ export async function scanSlice(env, n) {
     // gambling/adult/foreign takeover on one is ALWAYS a hacked victim — the highest-value lead. Confirm it (no AI
     // call) whether the gate called it flagged OR "spam_site" (homepage fully replaced by spam, all Bengali gone —
     // which the normal !flagged path below would otherwise DROP, silently losing a hacked-government lead).
-    if (BD_INST_TLD.test(reg) && ["gambling", "adult", "foreign_lang"].includes(sc.category) && (sc.flagged || sc.status === "spam_site")) {
+    // `!weakOnly` matters here more than anywhere else. This branch confirms with NO AI call, so a single
+    // generic English word on a .gov.bd was an instant lead: cirt.gov.bd — Bangladesh's national CERT, whose
+    // job is writing about gambling fraud — was published as a hacked gambling site on the word "gambling",
+    // and three .edu.bd sites on the word "escort". A restricted TLD raises the stakes of a false claim, it
+    // does not lower the evidence bar. Weak-only institutional hits fall through to review below.
+    if (BD_INST_TLD.test(reg) && ["gambling", "adult", "foreign_lang"].includes(sc.category) && (sc.flagged || sc.status === "spam_site") && !weakOnly(sc)) {
       findings.push({ domain: r.domain, business: r.business, phone: r.phone || sc.contactPhone, category: sc.category, layers: sc.layers.join(","), proof: sc.proof, proofUrl: sc.proofUrl, httpStatus: sc.httpStatus, nbuckets: sc.nbuckets, verdict: "inst-hacked", reason: "restricted BD institutional TLD + injected " + sc.category + " = hacked victim", confirmed: 1, evidence: sc.evidence, isBd: 1, bizType: sc.bizType, status: "lead", address: sc.address, district: sc.district, area: sc.area, ip: sc.ip });
       continue;
     }
