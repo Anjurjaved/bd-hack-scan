@@ -12,6 +12,21 @@
 // For local Mac testing, point SCAN_JS at the repo copy: SCAN_JS=../workers/src/scan.js
 const { scanDomain, geminiVerify, groqVerify, domainSpammy, hasCustomer, adultNeedsReview, BD_INST_TLD, BD_TLD, DETECTOR_GEN } = await import(process.env.SCAN_JS || "./scan.js");
 
+// ROOT CAUSE of the "queue empty" stall, found 2026-07-20 by reading the error the watchdog finally printed:
+// every failure is `TypeError: fetch failed (UND_ERR_CONNECT_TIMEOUT)`. This box has NO working IPv6 egress
+// (`curl -6` → 000) while the Worker hostname resolves to AAAA records first — so undici opens an IPv6 socket
+// that never connects and times out, and curl survives only because it does Happy Eyeballs. Node 20 has the
+// same mechanism but it is not on by default for fetch. Turning it on makes a dead IPv6 path fall back to IPv4
+// in ~250ms instead of stalling the pull. Kept alongside the watchdog, not instead of it: this fixes the known
+// cause, the watchdog still catches the unknown ones.
+import net from "node:net";
+try { net.setDefaultAutoSelectFamily(true); net.setDefaultAutoSelectFamilyAttemptTimeout(250); } catch (e) { /* older node */ }
+// Node warns at 10 listeners on the internal [Fetch] emitter. With CONCURRENCY in-flight requests, each
+// carrying an AbortSignal.timeout, that ceiling is passed immediately and the warning is noise rather than a
+// leak — but leaving it printing hides a real one if it ever appears. Sized off the actual concurrency.
+import events from "node:events";
+events.setMaxListeners(Math.max(64, Number(process.env.CONCURRENCY || 400) * 2));
+
 const API_BASE = (process.env.API_BASE || "https://bd-hack-audit-api.javed-it.workers.dev").replace(/\/+$/, "");
 const TOKEN = process.env.SHARED_TOKEN || "";
 const CONCURRENCY = Math.max(1, Number(process.env.CONCURRENCY || 400));
