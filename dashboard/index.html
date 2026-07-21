@@ -248,8 +248,13 @@
      cluster rows) scrolls inside its own box. Small cards stay on a 2-3 column
      grid — never one long serial column. Touch targets >= 40px.
      ============================================================================ */
-  html,body{max-width:100%;overflow-x:hidden;overscroll-behavior-y:none}
-  .wrap{width:100%}
+  /* DESKTOP SCROLL FIX (2026-07-21): `overflow-x:hidden` on the <html> element coerces its overflow-y to `auto`
+     per CSS Overflow-3, turning BOTH <html> and <body> into scroll containers — the classic anti-pattern that
+     kills wheel/trackpad vertical scrolling on desktop. Horizontal containment moves to the single .wrap wrapper
+     via `overflow-x:clip` (clip does NOT create a scroll container and does NOT touch the vertical axis), so the
+     page scrolls normally while mobile still can't scroll sideways. */
+  html,body{max-width:100%;overscroll-behavior-y:none}
+  .wrap{width:100%;overflow-x:clip}
   /* Any wide block scrolls itself, so the page body never does. */
   .scroll,.tblwrap{overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
   .tblwrap{width:100%}
@@ -284,7 +289,7 @@
        #leads is EXCLUDED: it already has a proper stacked-card layout below 640px
        (thead hidden, each td labelled from data-label), and forcing a min-width on
        that pushes every value outside the visible card. */
-    .scroll>table:not(#leads){min-width:660px}
+    .scroll>table:not(#leads):not(#allsites){min-width:660px}
     .scroll{max-height:none}
     .btn{min-height:40px;padding:9px 13px}
     .chip{min-height:32px}
@@ -316,6 +321,44 @@
   @media(max-width:640px){
     .modal .box,.modal-box,#modalBg>div{max-height:92svh;border-radius:14px;width:calc(100vw - 20px)}
   }
+
+  /* ============ mobile hamburger nav (activates <=640px) ============ */
+  .mobilebar{display:none}
+  .mnav-backdrop{position:fixed;inset:0;background:rgba(16,39,64,.5);opacity:0;visibility:hidden;
+    transition:opacity .25s ease,visibility .25s ease;z-index:60}
+  .mnav-backdrop.on{opacity:1;visibility:visible}
+  .mnav{position:fixed;top:0;left:0;height:100dvh;width:min(82vw,320px);background:var(--panel);
+    box-shadow:0 20px 60px rgba(16,39,64,.3);transform:translateX(-100%);
+    transition:transform .28s cubic-bezier(.4,0,.2,1);z-index:61;display:flex;flex-direction:column;
+    overscroll-behavior:contain;padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left)}
+  .mnav.on{transform:translateX(0)}
+  .mnav-head{display:flex;align-items:center;gap:10px;padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+  .mnav-brand{font-size:15px;font-weight:800;letter-spacing:-.2px}
+  .mnav-close{margin-left:auto;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--muted);display:grid;place-items:center;cursor:pointer}
+  .mnav-close svg{width:19px;height:19px}
+  .mnav-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px;
+    padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  .mnav-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:13px 14px;
+    border:0;border-radius:11px;background:none;cursor:pointer;font-family:var(--f);font-size:14px;
+    font-weight:700;color:var(--ink);min-height:48px}
+  .mnav-item svg{width:19px;height:19px;color:var(--muted);flex:0 0 auto}
+  .mnav-item .mnav-lbl{flex:1}
+  .mnav-item .badge{background:var(--red);color:#fff;border-radius:999px;font-size:10px;font-weight:800;
+    padding:2px 8px;font-family:var(--fb)}
+  .mnav-item:hover{background:var(--panel2)}
+  .mnav-item.on{background:rgba(0,102,255,.1);color:var(--blue)}
+  .mnav-item.on svg{color:var(--blue)}
+  @media(max-width:640px){
+    #tabs{display:none}   /* id (1-0-0) beats the .tabs strip rules within this breakpoint */
+    .mobilebar{display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:40;
+      margin:6px 0 12px;padding:8px 4px;background:var(--bg)}
+    .mnav-toggle{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel);
+      color:var(--ink);display:grid;place-items:center;cursor:pointer;box-shadow:var(--sh);flex:0 0 auto}
+    .mnav-toggle svg{width:22px;height:22px}
+    .mobilebar-title{font-size:15px;font-weight:800;letter-spacing:-.2px;overflow:hidden;
+      text-overflow:ellipsis;white-space:nowrap}
+  }
 </style>
 </head>
 <body>
@@ -343,6 +386,15 @@
     </div>
   </header>
 
+  <!-- MOBILE NAV BAR (visible <=640px only) -->
+  <div class="mobilebar" id="mobilebar">
+    <button class="mnav-toggle" id="mnavToggle" type="button" aria-label="মেনু খুলুন"
+            aria-expanded="false" aria-controls="mnav" onclick="openMobileNav()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <span class="mobilebar-title" id="mobilebarTitle">ওভারভিউ</span>
+  </div>
+
   <div class="tabs" id="tabs">
     <div class="tab on" data-v="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> ওভারভিউ</div>
     <div class="tab" data-v="leads" data-region="bd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg> BD Leads <span class="badge" id="leadBadge">0</span></div>
@@ -354,6 +406,7 @@
     <div class="tab" data-v="review"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg> অনুমোদনের অপেক্ষায় <span class="badge" id="revBadge" style="background:#b45309">0</span></div>
     <div class="tab" data-v="shots"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg> আক্রান্ত সাইট <span class="badge" id="shotBadge" style="background:var(--purple)">0</span></div>
     <div class="tab" data-v="safe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg> নিরাপদ সাইট <span class="badge" id="safeBadge" style="background:#10b981">0</span></div>
+    <div class="tab" data-v="allsites"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18"/></svg> সব scanned সাইট <span class="badge" id="allBadge" style="background:var(--muted)">0</span></div>
   </div>
 
   <!-- OVERVIEW -->
@@ -486,6 +539,49 @@
     </div>
   </div>
 
+  <!-- সব SCANNED সাইট — whole corpus, split by storage: dead vs running/safe -->
+  <style>
+    #allsites{width:100%;border-collapse:collapse;font-size:12.5px}
+    #allsites th,#allsites td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+    #allsites th{font-size:10.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;background:var(--panel2);z-index:1}
+    #allsites td a{font-weight:700}
+    @media(max-width:640px){
+      #allsites thead{display:none}
+      #allsites,#allsites tbody,#allsites tr,#allsites td{display:block;width:100%}
+      #allsites tr{border:1px solid var(--line);border-radius:13px;margin:0 0 10px;padding:7px 2px;background:var(--panel);box-shadow:var(--sh)}
+      #allsites tr:hover{background:var(--panel)}
+      #allsites td{border:none;padding:5px 13px;display:flex;justify-content:space-between;align-items:center;gap:14px;text-align:right;white-space:normal}
+      #allsites td::before{content:attr(data-label);color:var(--muted);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.3px;text-align:left;flex:0 0 auto}
+      #allsites td:first-child{border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:2px}
+    }
+  </style>
+  <div class="view" id="v-allsites">
+    <div class="panel">
+      <h2>সব scanned সাইট — কোন domain কোথায় জমা (মৃত না চালু)<small id="allHint"></small></h2>
+      <div class="toolbar" style="gap:10px">
+        <div id="allSub" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:11.5px;color:var(--muted);font-weight:700">তালিকা:</span>
+          <span class="chip on" data-at="dead" onclick="setAllType(this)">মৃত / বন্ধ <span id="allDeadC" class="bn-num"></span></span>
+          <span class="chip" data-at="running" onclick="setAllType(this)">চালু / নিরাপদ <span id="allRunC" class="bn-num"></span></span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:11.5px;color:var(--muted);font-weight:700">অঞ্চল:</span>
+          <span class="chip on" data-ar="" onclick="setAllRegion(this)">সব</span>
+          <span class="chip" data-ar="bd" onclick="setAllRegion(this)">বাংলাদেশি</span>
+          <span class="chip" data-ar="intl" onclick="setAllRegion(this)">অন্যান্য</span>
+        </div>
+        <input id="allSearch" placeholder="domain / business খুঁজুন…" oninput="allSearch(this.value)" />
+      </div>
+      <div class="scroll" id="allTableWrap">
+        <table id="allsites">
+          <thead><tr><th>domain</th><th>উৎস</th><th>scan হয়েছে?</th><th>deep?</th><th>অবস্থা</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div style="text-align:center;margin:14px 0"><button id="allMore" onclick="loadAllSites(ALLS.type,false)" style="padding:9px 22px;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-weight:700;cursor:pointer;display:none">আরও দেখুন · দেখাচ্ছে <span id="allShown" class="bn-num">০</span></button></div>
+    </div>
+  </div>
+
   <!-- MANUAL SCAN -->
   <div class="view" id="v-manual">
     <div class="panel">
@@ -561,6 +657,18 @@
   <footer>BD Hack-Audit · 100% free (Cloudflare Workers cron · ১৬ parallel shard + Oracle VM) · তৈরি করেছে <a href="https://javeditsolution.com" target="_blank" rel="noopener noreferrer">Javed IT Solution</a></footer>
 </div>
 
+<!-- MOBILE SLIDE-IN NAV (visible <=640px only) -->
+<div class="mnav-backdrop" id="mnavBackdrop" onclick="closeMobileNav()"></div>
+<aside class="mnav" id="mnav" aria-label="প্রধান মেনু" aria-hidden="true">
+  <div class="mnav-head">
+    <span class="mnav-brand">BD Hack-Audit</span>
+    <button class="mnav-close" type="button" aria-label="মেনু বন্ধ করুন" onclick="closeMobileNav()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <nav class="mnav-list" id="mnavList"></nav>
+</aside>
+
 <!-- LEAD DETAIL MODAL -->
 <div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
   <div class="modal">
@@ -609,7 +717,53 @@ document.getElementById('tabs').onclick=e=>{const t=e.target.closest('.tab');if(
   if(t.dataset.v==='manual')loadManualStore();
   if(t.dataset.v==='shots')renderShots();
   if(t.dataset.v==='review')loadReview();
-  if(t.dataset.v==='safe')loadSafe(true);};
+  if(t.dataset.v==='safe')loadSafe(true);
+  if(t.dataset.v==='allsites')loadAllSites(ALLS.type,true);};
+
+// ---- mobile hamburger nav: drives the SAME #tabs handler above via a proxy .click() ----
+function buildMobileNav(){
+  const list=document.getElementById('mnavList'); if(!list)return;
+  list.innerHTML='';
+  document.querySelectorAll('#tabs .tab').forEach(tab=>{
+    const item=document.createElement('button');
+    item.type='button';
+    item.className='mnav-item'+(tab.classList.contains('on')?' on':'');
+    const svg=tab.querySelector('svg'); if(svg)item.appendChild(svg.cloneNode(true));
+    const lbl=document.createElement('span'); lbl.className='mnav-lbl';
+    lbl.textContent=Array.from(tab.childNodes).filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ').replace(/\s+/g,' ').trim();
+    item.appendChild(lbl);
+    const badge=tab.querySelector('.badge'), bt=badge?badge.textContent.trim():'';
+    if(bt && bt!=='0' && bt!=='০'){
+      const b=document.createElement('span'); b.className='badge';
+      if(badge.style.background)b.style.background=badge.style.background;
+      b.textContent=bt; item.appendChild(b);
+    }
+    item.addEventListener('click',()=>{ tab.click(); closeMobileNav(); });
+    list.appendChild(item);
+  });
+}
+function openMobileNav(){
+  buildMobileNav();
+  document.getElementById('mnav').classList.add('on');
+  document.getElementById('mnav').setAttribute('aria-hidden','false');
+  document.getElementById('mnavBackdrop').classList.add('on');
+  document.getElementById('mnavToggle').setAttribute('aria-expanded','true');
+  document.body.style.overflow='hidden';
+}
+function closeMobileNav(){
+  const m=document.getElementById('mnav'); if(!m)return;
+  m.classList.remove('on'); m.setAttribute('aria-hidden','true');
+  document.getElementById('mnavBackdrop').classList.remove('on');
+  const tg=document.getElementById('mnavToggle'); if(tg)tg.setAttribute('aria-expanded','false');
+  document.body.style.overflow='';
+}
+// keep the mobile bar title synced with the active tab (extra listener → original handler untouched)
+document.getElementById('tabs').addEventListener('click',e=>{
+  const t=e.target.closest('.tab'); if(!t)return;
+  const title=document.getElementById('mobilebarTitle'); if(!title)return;
+  title.textContent=Array.from(t.childNodes).filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ').replace(/\s+/g,' ').trim();
+});
+document.addEventListener('keydown',e=>{ if(e.key==='Escape')closeMobileNav(); });
 
 // ---- review queue: adult findings that must not auto-publish ----
 let REVROWS=[], REVTOTAL=0, REVCAT='';
@@ -659,12 +813,41 @@ async function loadReview(){
   const obs=new IntersectionObserver((es,o)=>{es.forEach(e=>{if(e.isIntersecting){e.target.src=e.target.dataset.src;o.unobserve(e.target);}})},{rootMargin:'500px'});
   grid.querySelectorAll('img[data-src]').forEach(im=>obs.observe(im));
 }
+// Optimistic, cache-proof review decision. The old version refetched loadReview()/loadLeads() synchronously,
+// but /api/leads serves a 20s LEADS_CACHE keyed on the query string — so that immediate refetch re-served the
+// SAME stale list still containing this row, clobbering the optimistic filter and repainting the card back
+// ("clicking does nothing"). Fix: mutate locally, NO immediate refetch. The 60s loadReview / 30s loadLeads
+// pollers (both > 20s TTL) reconcile against fresh D1 on their own.
 async function decideReview(id,status,btn){
-  btn.disabled=true;btn.textContent='…';
-  try{await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,status})});}catch(e){}
+  const card=btn.closest('.shotcard');
+  const btns=card?[...card.querySelectorAll('button')]:[btn];
+  const row=REVROWS.find(l=>l.id===id);
+  btn.dataset.old=btn.textContent; btns.forEach(b=>b.disabled=true); btn.textContent='…';
+  let ok=false;
+  try{ ok=(await fetch(API+'/reject',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,status})})).ok; }catch(e){ ok=false; }
+  if(!ok){ // write failed — keep the card, let the user retry
+    btns.forEach(b=>b.disabled=false); btn.textContent=btn.dataset.old||(status==='lead'?'আসল ভুক্তভোগী — lead':'বাদ দিন');
+    return;
+  }
+  // success — drop the card from the local model + DOM WITHOUT a refetch (a refetch would hit the warm cache)
   REVROWS=REVROWS.filter(l=>l.id!==id);
-  if(status==='lead')loadLeads();
-  loadReview();
+  REVTOTAL=Math.max(0,REVTOTAL-1);
+  if(card)card.remove();
+  const rb=document.getElementById('revBadge'); if(rb)rb.textContent=bn(REVTOTAL);
+  renderRevFilter();
+  const grid=document.getElementById('revgrid');
+  if(grid&&!REVROWS.length)grid.innerHTML='<div class="empty" style="grid-column:1/-1">অপেক্ষমাণ কিছু নেই</div>';
+  // approve → publish to the lead list + gallery INSTANTLY (no waiting on the cached /api/leads poll), so it shows
+  // up in BD Leads + আক্রান্ত সাইট right away. Shape the pushed row exactly like dedupeLeads() output.
+  if(status==='lead'&&row&&!LEADS.some(l=>(l.ids||[l.id]).includes(row.id))){
+    row.confirmed=1; row.status='lead';
+    const apex=row.apex||row.domain, man=row.is_manual||0;
+    const host=LEADS.find(l=>(l.apex||l.domain)===apex&&(l.is_manual||0)===man);
+    if(host){ if(!(host.hosts||[]).includes(row.domain)){ (host.hosts=host.hosts||[host.domain]).push(row.domain); (host.ids=host.ids||[host.id]).push(row.id); host.hostCount=(host.hostCount||1)+1; } }
+    else{ row.hosts=[row.domain]; row.ids=[row.id]; row.hostCount=1; LEADS.push(row); }
+    updateBadges(); renderLeads();
+    if(document.getElementById('v-shots').classList.contains('on'))renderShots();
+  }
 }
 
 // ---- নিরাপদ সাইট (clean BD-business asset: scanned & NOT hacked) ----
@@ -755,6 +938,57 @@ async function exportSafe(fmt){
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,SAFE.type==='dead'?'DeadDomains':'SafeSites');XLSX.writeFile(wb,base+'.xlsx');}
 }
 
+// ---- সব scanned সাইট (whole corpus: dead vs running/safe) ----
+let ALLS={type:'dead',region:'',source:'',q:'',off:0,rows:[],done:false,loading:false,count:0};
+function allsQs(){return 'type='+ALLS.type+'&region='+ALLS.region+(ALLS.source?'&source='+encodeURIComponent(ALLS.source):'')+'&q='+encodeURIComponent(ALLS.q);}
+async function loadAllSites(type,reset){
+  if(type)ALLS.type=type;
+  if(ALLS.loading)return;ALLS.loading=true;
+  if(reset){ALLS.off=0;ALLS.rows=[];ALLS.done=false;
+    const tb=document.querySelector('#allsites tbody');if(tb)tb.innerHTML='<tr><td colspan="5" class="empty">লোড হচ্ছে…</td></tr>';}
+  const qs=allsQs();
+  try{
+    if(reset){
+      const c=await(await fetch(API+'/api/domains?'+qs+'&count=1',{cache:'no-store'})).json();
+      if(c&&c.ok){ALLS.count=c.count;
+        const span=document.getElementById(ALLS.type==='dead'?'allDeadC':'allRunC');if(span)span.textContent='· '+bn(c.count);
+        const tot=(STATS.counters&&STATS.counters.total_domains)||0;
+        const ab=document.getElementById('allBadge');if(ab&&tot)ab.textContent=bn(tot);
+        const h=document.getElementById('allHint');if(h)h.textContent=' · মোট '+bn(tot||c.count)+' domain · এই তালিকায় '+bn(c.count);}
+    }
+    const d=await(await fetch(API+'/api/domains?'+qs+'&limit=500&offset='+ALLS.off,{cache:'no-store'})).json();
+    if(d&&d.ok){ALLS.rows=ALLS.rows.concat(d.domains||[]);ALLS.off+=(d.domains||[]).length;if((d.domains||[]).length<500)ALLS.done=true;renderAllSites();}
+  }catch(e){const tb=document.querySelector('#allsites tbody');if(tb)tb.innerHTML='<tr><td colspan="5" class="empty">লোড করা গেল না, আবার চেষ্টা করুন</td></tr>';}
+  ALLS.loading=false;
+}
+function allStatusChip(r){
+  const hacked=r.hacked==1;
+  if(r.dead==1)return hacked?'<span class="tag t-gambling">আক্রান্ত</span>':'<span class="tag t-parked">DEAD</span>';
+  if(hacked)return '<span class="tag t-gambling">আক্রান্ত</span>';
+  return r.pass_no>0?'<span class="tag t-redirect">SAFE</span>':'<span class="tag t-pharma">RUNNING</span>';
+}
+function renderAllSites(){
+  const tb=document.querySelector('#allsites tbody');if(!tb)return;
+  if(!ALLS.rows.length){tb.innerHTML='<tr><td colspan="5" class="empty">এই filter-এ কোনো সাইট নেই</td></tr>';document.getElementById('allMore').style.display='none';return;}
+  tb.innerHTML=ALLS.rows.map(r=>{
+    const u='https://'+esc(r.domain);
+    const scanned=r.pass_no>0?'<span class="tag t-redirect">হ্যাঁ · pass '+bn(r.pass_no)+'</span>':'<span class="tag t-parked">না</span>';
+    const deep=(r.gen>=2)?'<span class="tag t-pharma">গভীর</span>':'<span class="tag t-parked">হালকা</span>';
+    return '<tr>'
+      +'<td data-label="domain"><a href="'+u+'" target="_blank" rel="noopener">'+esc(r.domain)+'</a></td>'
+      +'<td data-label="উৎস">'+esc(SRCLABEL[r.source]||r.source||'—')+'</td>'
+      +'<td data-label="scan">'+scanned+'</td>'
+      +'<td data-label="deep">'+deep+'</td>'
+      +'<td data-label="অবস্থা">'+allStatusChip(r)+'</td>'
+      +'</tr>';
+  }).join('');
+  document.getElementById('allMore').style.display=ALLS.done?'none':'';
+  document.getElementById('allShown').textContent=bn(ALLS.rows.length);
+}
+function setAllType(el){document.querySelectorAll('#allSub .chip').forEach(x=>x.classList.toggle('on',x===el));ALLS.type=el.dataset.at;loadAllSites(ALLS.type,true);}
+function setAllRegion(el){el.parentElement.querySelectorAll('.chip[data-ar]').forEach(x=>x.classList.toggle('on',x===el));ALLS.region=el.dataset.ar;loadAllSites(ALLS.type,true);}
+let allSearchT;function allSearch(v){ALLS.q=(v||'').trim();clearTimeout(allSearchT);allSearchT=setTimeout(()=>loadAllSites(ALLS.type,true),400);}
+
 // ---- charts ----
 function lineChart(svg,series,max,colors){const W=800,H=190,P=6;svg.innerHTML="";if(!series[0]||series[0].length<2){svg.innerHTML='<text x="400" y="95" text-anchor="middle" fill="#5b7088" font-size="13" font-family="Inter">data নেই</text>';return;}
   const n=series[0].length,mx=Math.max(max,1),X=i=>P+i*(W-2*P)/(n-1),Y=v=>H-P-(v/mx)*(H-2*P);
@@ -768,6 +1002,7 @@ const IC={t:'<path d="M3 7h18M3 12h18M3 17h18"/>',s:'<circle cx="11" cy="11" r="
 async function tick(){
   try{
     const s=await(await fetch(API+"/api/stats",{cache:'no-store'})).json();STATS=s;renderStats(s);
+    {const ab=document.getElementById('allBadge');if(ab&&s.counters&&s.counters.total_domains)ab.textContent=bn(s.counters.total_domains);}
     document.getElementById('liveDot').classList.remove('stale');document.getElementById('liveTxt').textContent="live";
     document.getElementById('updPill').textContent="updated "+new Date().toLocaleTimeString('en-GB');
   }catch(e){document.getElementById('liveDot').classList.add('stale');document.getElementById('liveTxt').textContent="reconnecting…";}

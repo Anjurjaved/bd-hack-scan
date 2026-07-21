@@ -10,7 +10,7 @@
 
 // Detection is the SHARED Worker code. On the VM, scan.js + signatures.js sit next to this file (./scan.js).
 // For local Mac testing, point SCAN_JS at the repo copy: SCAN_JS=../workers/src/scan.js
-const { scanDomain, geminiVerify, groqVerify, domainSpammy, hasCustomer, adultNeedsReview, BD_INST_TLD, BD_TLD, DETECTOR_GEN } = await import(process.env.SCAN_JS || "./scan.js");
+const { scanDomain, geminiVerify, groqVerify, domainSpammy, hasCustomer, adultNeedsReview, weakOnly, BD_INST_TLD, BD_TLD, DETECTOR_GEN } = await import(process.env.SCAN_JS || "./scan.js");
 
 // ROOT CAUSE of the "queue empty" stall, found 2026-07-20 by reading the error the watchdog finally printed:
 // every failure is `TypeError: fetch failed (UND_ERR_CONNECT_TIMEOUT)`. This box has NO working IPv6 egress
@@ -113,7 +113,10 @@ async function decide(rec, sc) {
   const isGA = ["gambling", "adult", "foreign_lang"].includes(sc.category);
   // restricted BD institutional TLD (.gov/.edu/.ac/.mil.bd) + spam = ALWAYS a hacked victim (highest-value lead),
   // whether flagged OR fully-defaced (spam_site). Confirm without an AI call, before the !flagged drop below.
-  if (isGA && BD_INST_TLD.test(reg) && (sc.flagged || sc.status === "spam_site")) {
+  // `!weakOnly` mirrors scan.js:949 — a lone generic English word ("gambling" on cirt.gov.bd, the national CERT)
+  // must not auto-confirm a restricted TLD. This guard was on scanSlice but NOT here, so the VM was confirming
+  // weak-only institutional hits the shards correctly demoted.
+  if (isGA && BD_INST_TLD.test(reg) && (sc.flagged || sc.status === "spam_site") && !weakOnly(sc)) {
     return { rowid: rec.rowid, finding: { domain: rec.domain, business: rec.business, phone: rec.phone || sc.contactPhone, category: sc.category, layers: (sc.layers || []).join(","), proof: sc.proof, proofUrl: sc.proofUrl, httpStatus: sc.httpStatus, nbuckets: sc.nbuckets, verdict: "inst-hacked", reason: "restricted BD institutional TLD + injected " + sc.category + " = hacked victim", confirmed: 1, evidence: sc.evidence, isBd: 1, bizType: sc.bizType, status: "lead", address: sc.address, district: sc.district, area: sc.area, ip: sc.ip } };
   }
   // Not flagged: PARK only when the domain NAME is a gambling/adult brand (safe); an openly-spam foreign homepage
@@ -136,6 +139,10 @@ async function decide(rec, sc) {
   }
   let status = sc.status, confirmed = sc.confirmed, verdict = sc.verdict, biz = sc.bizType;
   let reason = `posterior=${sc.posterior} buckets=${sc.nbuckets}${sc.hard ? " HARD" : ""}`;
+  // PARKING GATE — mirrors scan.js:969. A domain-parking / expired-domain monetization page (l.cdn-fileserver
+  // network) is neither a hack nor a customer. This gate was on scanSlice but NOT in this VM path, so the VM was
+  // re-confirming as leads the 971 parked domains the shards park — silently undoing the D1 cleanup every re-scan.
+  if (sc.parked) return { rowid: rec.rowid, park: true, clear: okClear(true) };
   if (isGA) {
     // gambling/adult BRAND in the domain NAME → genuine spam → park, spend NO Gemini.
     if (domainSpammy(reg)) return { rowid: rec.rowid, park: true, clear: okClear(true) };
@@ -167,6 +174,12 @@ async function decide(rec, sc) {
   // genuine porn tubes walked through (their ad-malware/redirect layers make the category non-GA, which skipped both
   // the name test and the AI). Same narrow brand list as above — no new false-positive surface.
   if (domainSpammy(reg)) return { rowid: rec.rowid, park: true, clear: okClear(true) };
+  // WEAK-TOKEN GATE — mirrors scan.js:1008. A lone generic English word (slots/casino/gambling) can never on its
+  // own confirm a lead, whatever the AI said; demote to review for a human. This was on scanSlice but not here.
+  if (confirmed && weakOnly(sc)) {
+    status = "review"; confirmed = 0; verdict = "weak-only";
+    reason = `only generic English vocabulary matched (${sc.proof || ""}) — needs human confirmation`;
+  }
   // (non-GA categories — malware/deface/cloak/redirect — reach here; they need no AI. A spam_site is always
   // flagged=false and was handled by the !sc.flagged guard above, so no branch is needed here.)
   return {

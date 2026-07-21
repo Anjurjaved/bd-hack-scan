@@ -318,6 +318,14 @@ async function vmPull(env, body) {
   //   5. least-recently-scanned          — the pre-existing continuity rotation, so scanners are never idle
   const tiers = [
     { sql: `${COLS} WHERE pass_no=0 ORDER BY bd_score DESC, rowid LIMIT ?`, args: [] },
+    // HIGH-VALUE FIRST (2026-07-21): the .gov.bd/.edu.bd/.ac.bd sites are registrar-locked (can't be a spam brand),
+    // so a hack on one is always a real, sellable victim — and they are exactly where cloaked gambling injection
+    // (amrgc.edu.bd) hides. There are ~20k live + ~10.5k dead institutional rows still un-deep-scanned; pulling them
+    // BEFORE the 76k foreign live-shallow rows deep-audits every BD government/school site in ~11h instead of week-3.
+    // Live first, then the dead-resurrection of the same class. `pass_no ASC` keeps the queue moving (same rule as
+    // the generic tiers); once all institutional are gen>=DETECTOR_GEN these return empty and fall through.
+    { sql: `${COLS} WHERE gen<? AND dead=0 AND pass_no<9000 AND (domain LIKE '%.gov.bd' OR domain LIKE '%.edu.bd' OR domain LIKE '%.ac.bd') AND domain NOT IN (SELECT domain FROM findings WHERE confirmed=1) ORDER BY pass_no ASC, bd_score DESC LIMIT ?`, args: [DETECTOR_GEN] },
+    { sql: `${COLS} WHERE gen<? AND dead=1 AND pass_no<9000 AND (domain LIKE '%.gov.bd' OR domain LIKE '%.edu.bd' OR domain LIKE '%.ac.bd') ORDER BY pass_no ASC, bd_score DESC LIMIT ?`, args: [DETECTOR_GEN] },
     // The re-qualification tiers order by pass_no ASC, not by bd_score. pass_no is advanced by the pre-mark below
     // on every single pull, so the queue keeps moving even if gen never advances — which is exactly what happens
     // whenever the VM is running older code than this Worker. Ordering by a static column instead would hand the
@@ -591,6 +599,8 @@ async function apiDomains(env, url) {
   // clean = scanned, reachable (NOT dead), and NOT confirmed-hacked → the sellable SAFE-site asset.
   if (type === "clean") where += " AND pass_no>0 AND pass_no<9000 AND (dead IS NULL OR dead=0) AND domain NOT IN (SELECT domain FROM findings WHERE confirmed=1)";
   else if (type === "dead") where += " AND dead=1";     // scanned but unreachable / no-longer-exists → kept separate
+  // running = alive & NOT confirmed-hacked = the whole "chalu/nirapod" corpus (includes not-yet-scanned live sites)
+  else if (type === "running") where += " AND (dead IS NULL OR dead=0) AND domain NOT IN (SELECT domain FROM findings WHERE confirmed=1)";
   else if (type === "unscanned") where += " AND pass_no=0";
   // type=all → whole registry. BD region = the same hosting-based definition as leads (bd_score>=25 OR .bd).
   if (region === "bd") where += " AND (bd_score>=25 OR domain LIKE '%.bd')";
@@ -605,7 +615,7 @@ async function apiDomains(env, url) {
   if (biz) {
     const CAP = 20000;                 // bounded work per request; `truncated` tells the caller we stopped early
     const rows = (await env.DB.prepare(
-      "SELECT domain,business,bd_score,source,pass_no,ip FROM domains WHERE " + where + " ORDER BY bd_score DESC, domain LIMIT ?"
+      "SELECT domain,business,bd_score,source,pass_no,ip,gen,dead,(EXISTS(SELECT 1 FROM findings f WHERE f.domain=domains.domain AND f.confirmed=1)) AS hacked FROM domains WHERE " + where + " ORDER BY bd_score DESC, domain LIMIT ?"
     ).bind(...binds, CAP).all()).results || [];
     for (const r of rows) r.category = bizType(r.domain, "", r.business || "");
     const all = rows.filter((r) => r.category === biz);
@@ -618,7 +628,7 @@ async function apiDomains(env, url) {
     return json({ ok: true, type, region: region || "all", count: c ? c.n : 0 });
   }
   const rows = (await env.DB.prepare(
-    "SELECT domain,business,bd_score,source,pass_no,ip FROM domains WHERE " + where + " ORDER BY bd_score DESC, domain LIMIT ? OFFSET ?"
+    "SELECT domain,business,bd_score,source,pass_no,ip,gen,dead,(EXISTS(SELECT 1 FROM findings f WHERE f.domain=domains.domain AND f.confirmed=1)) AS hacked FROM domains WHERE " + where + " ORDER BY bd_score DESC, domain LIMIT ? OFFSET ?"
   ).bind(...binds, limit, offset).all()).results || [];
   // enrich each row with a name-derived business category (zero DB cost — regex on domain+business).
   // powers the "organize clean sites by category" view without a write-per-clean-domain.
